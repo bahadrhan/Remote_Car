@@ -1,0 +1,4 @@
+../Core/Src/app/ControlManager.cpp:6:6:void ControlManager::init(Parameters&, CommandExecutor&, AutonomyController&)	32	static
+../Core/Src/app/ControlManager.cpp:22:6:bool ControlManager::isMotionCommand_(CommandType) const	16	static
+../Core/Src/app/ControlManager.cpp:30:6:void ControlManager::onCommand(const Command&, uint32_t)	24	static
+../Core/Src/app/ControlManager.cpp:55:6:void ControlManager::update(uint32_t)	32	static

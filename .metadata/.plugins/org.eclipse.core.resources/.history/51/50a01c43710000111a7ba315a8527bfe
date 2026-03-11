@@ -1,0 +1,55 @@
+#include "stm32f0xx.h"
+
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/BoardPins.hpp"
+#include "hw/Gpio.hpp"
+
+static bool waitEchoHigh(uint32_t timeout_us)
+{
+    for (uint32_t i = 0; i < timeout_us; ++i)
+    {
+        if (Gpio::read(BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN))
+            return true;
+        Timebase::delayUs(1);
+    }
+    return false;
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    Clock::enableGpioClock(BoardPins::HEADLIGHT_PORT);
+    Gpio::configureOutput(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+    Gpio::setLow(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+
+    Clock::enableGpioClock(BoardPins::US_REAR_TRIG_PORT);
+    Clock::enableGpioClock(BoardPins::US_REAR_ECHO_PORT);
+
+    Gpio::configureOutput(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+    Gpio::configureInput (BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN);
+
+    Gpio::setLow(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+
+    Timebase::delayMs(200);
+
+    while (1)
+    {
+        // TRIG 10us
+        Gpio::setHigh(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+        Timebase::delayUs(10);
+        Gpio::setLow(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+
+        // If ECHO ever goes high -> blink headlight
+        if (waitEchoHigh(30000))
+        {
+            Gpio::setHigh(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+            Timebase::delayMs(200);
+            Gpio::setLow(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+        }
+
+        Timebase::delayMs(150);
+    }
+}

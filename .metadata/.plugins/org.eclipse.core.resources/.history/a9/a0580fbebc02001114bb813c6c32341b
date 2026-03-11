@@ -1,0 +1,148 @@
+#include "stm32f0xx.h"
+
+#include <cstdint>
+#include <cstdio>
+
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/BoardPins.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/Uart.hpp"
+
+#include "app/MotorDriver.hpp"
+#include "app/Lights.hpp"
+#include "sensors/UltrasonicSensor.hpp"
+
+static MotorDriver motor;
+static Lights lights;
+
+static UltrasonicSensor usFront(
+    BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN,
+    BoardPins::US_ECHO_PORT, BoardPins::US_ECHO_PIN);
+
+static UltrasonicSensor usRear(
+    BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN,
+    BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN);
+
+static uint8_t  speedPct = 40;
+
+static int32_t g_frontMm = -1;
+static int32_t g_rearMm  = -1;
+
+static uint32_t g_lastDistMs = 0;
+static constexpr uint32_t DIST_PERIOD_MS = 300;
+
+static void setSpeed(uint8_t pct)
+{
+    if (pct > 100) pct = 100;
+    speedPct = pct;
+    motor.setSpeedPercent(speedPct);
+
+    char buf[24];
+    std::snprintf(buf, sizeof(buf), "SPD=%u\n", (unsigned)speedPct);
+    Uart::write(buf);
+}
+
+static void stopAll()
+{
+    motor.stop();
+    Uart::write("M=STOP\n");
+}
+
+static void measureDistancesOnce()
+{
+    uint32_t f = 0, r = 0;
+
+    bool okF = usFront.measureOnce(f);
+    Timebase::delayMs(5);                 // small gap reduces cross-talk
+    bool okR = usRear.measureOnce(r);
+
+    g_frontMm = okF ? (int32_t)f : -1;
+    g_rearMm  = okR ? (int32_t)r : -1;
+}
+
+static void publishDistances()
+{
+    char buf[64];
+    std::snprintf(buf, sizeof(buf),
+                  "D F=%ld R=%ld\n",
+                  (long)g_frontMm,
+                  (long)g_rearMm);
+    Uart::write(buf);
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    // UART
+    Uart::init(115200);
+    Uart::write("BOOT\n");
+
+    // Init hardware
+    motor.init();
+    motor.enable();
+
+    lights.init();
+    lights.setHeadlight(false);
+    lights.setStoplight(false);
+
+    usFront.init();
+    usRear.init();
+
+    setSpeed(40);
+    stopAll();
+
+    g_lastDistMs = Timebase::millis();
+
+    while (1)
+    {
+        // ---- 1) Drain UART quickly (important!) ----
+        uint8_t b = 0;
+        while (Uart::readByte(b))
+        {
+            // ---- Lights ----
+            if      (b == 'H') { lights.setHeadlight(true);  Uart::write("HL=1\n"); }
+            else if (b == 'h') { lights.setHeadlight(false); Uart::write("HL=0\n"); }
+            else if (b == 'S') { lights.setStoplight(true);  Uart::write("SL=1\n"); }
+            else if (b == 's') { lights.setStoplight(false); Uart::write("SL=0\n"); }
+
+            // ---- Speed ----
+            else if (b >= '0' && b <= '9')
+            {
+                setSpeed((uint8_t)(b - '0') * 10);
+            }
+
+            // ---- Motors ----
+            else if (b == 'F') { motor.forward();   Uart::write("M=F\n"); }
+            else if (b == 'B') { motor.back();      Uart::write("M=B\n"); }
+            else if (b == 'L') { motor.spinLeft();  Uart::write("M=L\n"); }
+            else if (b == 'R') { motor.spinRight(); Uart::write("M=R\n"); }
+            else if (b == 'X') { stopAll(); }
+
+            // ---- Sensors: manual immediate request (optional) ----
+            else if (b == 'g')
+            {
+                measureDistancesOnce();
+                publishDistances();
+            }
+            else
+            {
+                Uart::write("RX=?\n");
+            }
+        }
+
+        // ---- 2) Periodic telemetry every 300ms (works while driving) ----
+        const uint32_t now = Timebase::millis();
+        if ((uint32_t)(now - g_lastDistMs) >= DIST_PERIOD_MS)
+        {
+            g_lastDistMs = now;
+            measureDistancesOnce();
+            publishDistances();
+        }
+
+        // Small idle delay to reduce CPU load (keep short!)
+        Timebase::delayMs(1);
+    }
+}

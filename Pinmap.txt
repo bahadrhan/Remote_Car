@@ -1,0 +1,38 @@
+LEFT SIDE — TB6612 #1
+(Left wheels: Front-Left + Rear-Left)
+Motor A → Front-Left
+Function	TB6612 pin	STM32 pin	Arduino pin
+PWM (speed)	PWMA	PA6 (TIM3_CH1)	D12
+Direction	AIN1	PB4	D5
+Direction	AIN2	PB5	D4
+
+Motor B → Rear-Left
+Function	TB6612 pin	STM32 pin	Arduino pin
+PWM (speed)	PWMB	PA7 (TIM3_CH2)	D11
+Direction	BIN1	PB6	(check PB6 silkscreen)
+Direction	BIN2	PB7	D10
+
+RIGHT SIDE — TB6612 #2
+(Right wheels: Front-Right + Rear-Right)
+Motor A → Front-Right
+Function	TB6612 pin	STM32 pin	Arduino pin
+PWM (speed)	PWMA	PB0 (TIM3_CH3)	D6
+Direction	AIN1	PB8	D15
+Direction	AIN2	PB9	D14
+
+Motor B → Rear-Right
+Function	TB6612 pin	STM32 pin	Arduino pin
+PWM (speed)	PWMB	PB1 (TIM3_CH4)	D7
+Direction	BIN1	PB10	(PB10 label on board)
+Direction	BIN2	PB11	(PB11 label on board)
+
+SHARED (both TB6612 boards)
+Function	TB6612 pin	STM32 pin	Arduino pin
+Enable	STBY	PB3	D3
+Logic power	VCC	—	3.3V
+Ground	GND	—	GND
+Motor power	VM	—	Battery +
+
+
+Acoustic Sensor: PA0=echo
+		PA1=trigger

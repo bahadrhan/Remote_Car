@@ -1,0 +1,17 @@
+#pragma once
+#include <cstdint>
+
+struct Parameters
+{
+    uint16_t cmd_timeout_ms      = 300;
+
+    uint8_t  max_speed_pct       = 60;
+
+    bool headlight_enabled       = true;
+    bool stoplight_enabled       = true;
+
+    bool front_us_enabled        = true;
+    bool rear_us_enabled         = true;
+
+    uint16_t telemetry_period_ms = 100;
+};

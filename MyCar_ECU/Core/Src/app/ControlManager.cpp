@@ -1,0 +1,86 @@
+#include "app/ControlManager.hpp"
+
+#include "app/CommandExecutor.hpp"
+#include "app/AutonomyController.hpp"
+
+void ControlManager::init(Parameters& params,
+                          CommandExecutor& exec,
+                          AutonomyController& autoCtrl)
+{
+    params_ = &params;
+    exec_ = &exec;
+    auto_ = &autoCtrl;
+
+    lastCmdMs_ = 0;
+    stopLatched_ = false;
+    haveCmd_ = false;
+    lastCmd_ = {};
+
+    exec_->apply({CommandType::Stop, 0});
+}
+
+bool ControlManager::isMotionCommand_(CommandType t) const
+{
+    return (t == CommandType::Forward ||
+            t == CommandType::Backward ||
+            t == CommandType::TurnLeft ||
+            t == CommandType::TurnRight);
+}
+
+void ControlManager::onCommand(const Command& cmd, uint32_t nowMs)
+{
+    lastCmdMs_ = nowMs;
+    lastCmd_ = cmd;
+    haveCmd_ = true;
+
+    if (cmd.type == CommandType::Stop)
+    {
+        exec_->apply(cmd);
+
+        if (cmd.value == 1)
+            stopLatched_ = true;
+
+        auto_->reset();
+        return;
+    }
+
+    exec_->apply(cmd);
+
+    if (stopLatched_ && isMotionCommand_(cmd.type))
+        stopLatched_ = false;
+
+    auto_->reset();
+}
+
+void ControlManager::update(uint32_t nowMs)
+{
+    if (!params_ || !exec_ || !auto_)
+        return;
+
+    if (stopLatched_)
+    {
+        exec_->apply({CommandType::Stop, 0});
+        return;
+    }
+
+    const bool commandActive =
+        haveCmd_ && (static_cast<uint32_t>(nowMs - lastCmdMs_) < params_->commandTimeoutMs);
+
+    if (commandActive)
+    {
+        if (isMotionCommand_(lastCmd_.type) || lastCmd_.type == CommandType::Stop)
+            exec_->apply(lastCmd_);
+
+        return;
+    }
+
+    if (params_->autoModeEnabled)
+    {
+        Command autoCmd = auto_->update(nowMs);
+        exec_->apply(autoCmd);
+    }
+    else
+    {
+        exec_->apply({CommandType::Stop, 0});
+    }
+}

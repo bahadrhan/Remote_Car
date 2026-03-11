@@ -1,0 +1,29 @@
+#include "stm32f0xx.h"
+
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/BoardPins.hpp"
+#include "hw/Gpio.hpp"
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    Clock::enableGpioClock(BoardPins::STOPLIGHT_PORT);
+    Gpio::configureOutput(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+    Gpio::setLow(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+
+    Clock::enableGpioClock(BoardPins::US_REAR_ECHO_PORT);
+    Gpio::configureInput(BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN);
+
+    while (1)
+    {
+        if (Gpio::read(BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN))
+            Gpio::setHigh(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+        else
+            Gpio::setLow(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+
+        Timebase::delayMs(5);
+    }
+}

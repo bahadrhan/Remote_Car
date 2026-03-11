@@ -1,0 +1,33 @@
+#pragma once
+
+#include <cstdint>
+
+struct Parameters
+{
+
+    uint8_t defaultSpeedPercent = 60;
+
+
+    bool lightsEnabled  = true;
+    bool sensorsEnabled = true;
+
+
+    bool autoModeEnabled = true;
+
+
+    uint32_t commandTimeoutMs = 500;
+
+
+    uint32_t obstacleThresholdMm = 300;   // treat <= this as "blocked"
+    uint32_t reverseTimeMs       = 400;   // how long to reverse in autonomy
+    uint32_t turnTimeMs          = 300;   // how long to turn in autonomy
+    uint32_t stopHoldMs          = 200;   // optional pause between maneuvers
+};
+
+
+static inline uint8_t clampPercent(int v)
+{
+    if (v < 0) return 0;
+    if (v > 100) return 100;
+    return static_cast<uint8_t>(v);
+}

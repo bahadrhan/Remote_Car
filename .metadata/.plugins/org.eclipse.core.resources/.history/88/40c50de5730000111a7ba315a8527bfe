@@ -1,0 +1,164 @@
+#include "stm32f0xx.h"
+
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/BoardPins.hpp"
+#include "hw/Gpio.hpp"
+
+#include "app/MotorDriver.hpp"
+
+// ---------------- ultrasonic helpers ----------------
+static bool waitEcho(GPIO_TypeDef* port, uint16_t pin, bool level, uint32_t timeout_us)
+{
+    for (uint32_t i = 0; i < timeout_us; ++i)
+    {
+        if (Gpio::read(port, pin) == level)
+            return true;
+        Timebase::delayUs(1);
+    }
+    return false;
+}
+
+static uint32_t measureEchoUs(GPIO_TypeDef* port, uint16_t pin)
+{
+    if (!waitEcho(port, pin, true, 30000))
+        return 0;
+
+    uint32_t w = 0;
+    while (w < 30000)
+    {
+        if (!Gpio::read(port, pin))
+            break;
+        ++w;
+        Timebase::delayUs(1);
+    }
+    return w;
+}
+
+static uint32_t usToMm(uint32_t us)
+{
+    return (us * 10u) / 58u;
+}
+
+// ---------------- button (PC13, active-low) ----------------
+static bool buttonPressedEdge()
+{
+    static bool last = false;
+
+    // PC13 on Nucleo is usually active-low (pressed = 0)
+    bool now = !Gpio::read(BoardPins::BTN_PORT, BoardPins::BTN_PIN);
+
+    bool pressed = (now && !last);
+    last = now;
+
+    return pressed;
+}
+
+static bool isObstacle(GPIO_TypeDef* trigPort, uint16_t trigPin,
+                       GPIO_TypeDef* echoPort, uint16_t echoPin,
+                       uint32_t threshold_mm)
+{
+    // TRIG 10us
+    Gpio::setHigh(trigPort, trigPin);
+    Timebase::delayUs(10);
+    Gpio::setLow(trigPort, trigPin);
+
+    uint32_t echo_us = measureEchoUs(echoPort, echoPin);
+    if (echo_us == 0)
+        return false;
+
+    uint32_t dist_mm = usToMm(echo_us);
+    return (dist_mm > 0 && dist_mm <= threshold_mm);
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    // Button
+    Clock::enableGpioClock(BoardPins::BTN_PORT);
+    Gpio::configureInput(BoardPins::BTN_PORT, BoardPins::BTN_PIN);
+
+    // Ultrasonic GPIO clocks + config
+    Clock::enableGpioClock(BoardPins::US_TRIG_PORT);
+    Clock::enableGpioClock(BoardPins::US_ECHO_PORT);
+    Clock::enableGpioClock(BoardPins::US_REAR_TRIG_PORT);
+    Clock::enableGpioClock(BoardPins::US_REAR_ECHO_PORT);
+
+    Gpio::configureOutput(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN);
+    Gpio::configureInput (BoardPins::US_ECHO_PORT, BoardPins::US_ECHO_PIN);
+
+    Gpio::configureOutput(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+    Gpio::configureInput (BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN);
+
+    Gpio::setLow(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN);
+    Gpio::setLow(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+
+    // Motor
+    MotorDriver motor;
+    motor.init();
+    motor.enable();
+    motor.setSpeedPercent(70);
+    motor.stop();
+
+    const uint32_t threshold_mm = 300;
+
+    bool running = false;
+
+    while (1)
+    {
+        // Button toggle: STOP <-> START
+        if (buttonPressedEdge())
+        {
+            running = !running;
+
+            if (!running)
+            {
+                motor.stop();
+            }
+
+            // crude debounce
+            Timebase::delayMs(200);
+        }
+
+        if (!running)
+        {
+            Timebase::delayMs(20);
+            continue;
+        }
+
+        // Front check
+        bool frontBlocked = isObstacle(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN,
+                                       BoardPins::US_ECHO_PORT, BoardPins::US_ECHO_PIN,
+                                       threshold_mm);
+
+        // avoid cross-talk
+        Timebase::delayMs(100);
+
+        // Rear check
+        bool rearBlocked = isObstacle(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN,
+                                      BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN,
+                                      threshold_mm);
+
+        // Decision exactly as you requested:
+        // - If front blocked => forward
+        // - Else if rear blocked => backward
+        // - Else stop (safe)
+        // - If both blocked => stop
+        if (frontBlocked && !rearBlocked)
+        {
+            motor.forward();
+        }
+        else if (rearBlocked && !frontBlocked)
+        {
+            motor.back();
+        }
+        else
+        {
+            motor.stop();
+        }
+
+        Timebase::delayMs(120);
+    }
+}

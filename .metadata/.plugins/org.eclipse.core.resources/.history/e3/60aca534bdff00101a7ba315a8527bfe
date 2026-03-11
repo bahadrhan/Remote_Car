@@ -1,0 +1,58 @@
+#pragma once
+#include <cstdint>
+#include "stm32f0xx.h"
+
+class UltrasonicDual
+{
+public:
+    enum class Which : uint8_t { Front, Rear };
+    enum class Result : uint8_t { None, Ok, Timeout };
+
+    void init(); // config GPIO + TIM2(1MHz) + EXTI for both echo pins
+
+    // Start a measurement (non-blocking). Result comes via interrupts.
+    void start(Which w, uint32_t timeout_us);
+
+    // Call periodically in main loop to handle timeout
+    void tick();
+
+    // Check if a result is ready; returns Ok/Timeout/None. If Ok, distance_mm is valid.
+    Result fetchResult(Which w, uint32_t& distance_mm);
+
+    // Returns true while waiting for edges
+    bool isBusy(Which w) const;
+
+    // ISR hook (called from EXTI IRQ)
+    void onEchoEdge(Which w);
+
+private:
+    enum class State : uint8_t { Idle, WaitRise, WaitFall, DoneOk, DoneTimeout };
+
+    struct Chan
+    {
+        GPIO_TypeDef* trigPort;
+        uint16_t      trigPin;
+        GPIO_TypeDef* echoPort;
+        uint16_t      echoPin;
+        uint8_t       extiLine;       // 0..15
+
+        volatile State state{State::Idle};
+        volatile uint32_t start_us{0};
+        volatile uint32_t timeout_us{0};
+        volatile uint32_t t_rise{0};
+        volatile uint32_t t_fall{0};
+        volatile uint32_t dist_mm{0};
+    };
+
+    static uint32_t nowUs_();
+    static void tim2Init1MHz_();
+    static void extiInit_();
+    static uint32_t usToMm_(uint32_t echo_high_us);
+
+    void startImpl_(Chan& c, uint32_t timeout_us);
+
+    Chan front_;
+    Chan rear_;
+
+    static UltrasonicDual* self_; // for ISR routing
+};

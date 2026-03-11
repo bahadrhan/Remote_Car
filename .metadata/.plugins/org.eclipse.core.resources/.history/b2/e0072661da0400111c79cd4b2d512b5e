@@ -1,0 +1,116 @@
+#include "hw/Uart.hpp"
+#include "hw/BoardPins.hpp"
+#include "stm32f0xx.h"
+
+namespace
+{
+    constexpr uint32_t PCLK_HZ = 48000000u;
+
+    inline uint8_t pinIndexFromMask(uint16_t pinMask)
+    {
+        for (uint8_t i = 0; i < 16; ++i)
+        {
+            if (pinMask == (1u << i)) return i;
+        }
+        return 0;
+    }
+
+    inline void enableUartClock_(USART_TypeDef* uart)
+    {
+        if (uart == USART1)
+        {
+            RCC->APB2ENR |= RCC_APB2ENR_USART1EN;
+        }
+        else if (uart == USART2)
+        {
+            RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
+#ifdef RCC_CFGR3_USART2SW
+            RCC->CFGR3 &= ~RCC_CFGR3_USART2SW;
+#endif
+        }
+    }
+
+    inline void configureUartPinsAf_(GPIO_TypeDef* port, uint16_t txMask, uint16_t rxMask)
+    {
+        // enable the port clock (your pins are on BoardPins::UART_PORT)
+        if (port == GPIOA) RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
+        else if (port == GPIOB) RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
+        else if (port == GPIOC) RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
+        else if (port == GPIOD) RCC->AHBENR |= RCC_AHBENR_GPIODEN;
+        else if (port == GPIOF) RCC->AHBENR |= RCC_AHBENR_GPIOFEN;
+
+        const uint8_t txPin = pinIndexFromMask(txMask);
+        const uint8_t rxPin = pinIndexFromMask(rxMask);
+
+        port->MODER &= ~((3u << (txPin * 2)) | (3u << (rxPin * 2)));
+        port->MODER |=  ((2u << (txPin * 2)) | (2u << (rxPin * 2)));
+
+        port->PUPDR &= ~((3u << (txPin * 2)) | (3u << (rxPin * 2)));
+        port->PUPDR |=  (1u << (rxPin * 2)); // pull-up RX
+
+        auto setAf1 = [&](uint8_t pin)
+        {
+            const uint8_t afrIndex = (pin >= 8) ? 1 : 0;
+            const uint8_t afrShift = (pin >= 8) ? (pin - 8) : pin;
+            port->AFR[afrIndex] &= ~(0xFu << (4u * afrShift));
+            port->AFR[afrIndex] |=  (1u   << (4u * afrShift)); // AF1
+        };
+
+        setAf1(txPin);
+        setAf1(rxPin);
+
+        port->OSPEEDR |= (3u << (txPin * 2)) | (3u << (rxPin * 2));
+    }
+
+    inline void configureUart_(USART_TypeDef* uart, uint32_t baud)
+    {
+        enableUartClock_(uart);
+
+        uart->CR1 = 0;
+        uart->CR2 = 0;
+        uart->CR3 = 0;
+
+        const uint32_t brr = (PCLK_HZ + (baud / 2u)) / baud;
+        uart->BRR = brr;
+
+        uart->CR1 |= USART_CR1_TE | USART_CR1_RE;
+        uart->CR1 |= USART_CR1_UE;
+
+        (void)uart->ISR;
+    }
+}
+
+namespace Uart
+{
+    void init(uint32_t baud)
+    {
+        configureUartPinsAf_(BoardPins::UART_PORT, BoardPins::UART_TX_PIN, BoardPins::UART_RX_PIN);
+        configureUart_(BoardPins::UART, baud);
+    }
+
+    void writeByte(uint8_t b)
+    {
+        while ((BoardPins::UART->ISR & USART_ISR_TXE) == 0) {}
+        BoardPins::UART->TDR = b;
+    }
+
+    void write(const char* s)
+    {
+        while (*s)
+        {
+            if (*s == '\n') writeByte('\r');
+            writeByte(static_cast<uint8_t>(*s));
+            ++s;
+        }
+    }
+
+    bool readByte(uint8_t& out)
+    {
+        if (BoardPins::UART->ISR & USART_ISR_RXNE)
+        {
+            out = static_cast<uint8_t>(BoardPins::UART->RDR);
+            return true;
+        }
+        return false;
+    }
+}

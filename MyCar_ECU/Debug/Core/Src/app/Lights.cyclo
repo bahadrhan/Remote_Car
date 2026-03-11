@@ -1,0 +1,11 @@
+../Core/Src/app/Lights.cpp:7:6:void Lights::init()	1
+../Core/Src/app/Lights.cpp:19:6:void Lights::enable()	1
+../Core/Src/app/Lights.cpp:24:6:void Lights::disable()	1
+../Core/Src/app/Lights.cpp:30:6:bool Lights::isEnabled() const	1
+../Core/Src/app/Lights.cpp:35:6:void Lights::setConfig(const LightsConfig&)	1
+../Core/Src/app/Lights.cpp:40:6:void Lights::apply(bool)	2
+../Core/Src/app/Lights.cpp:55:6:void Lights::setHeadlight(bool)	2
+../Core/Src/app/Lights.cpp:61:6:void Lights::setStoplight(bool)	2
+../Core/Src/app/Lights.cpp:67:6:void Lights::allOff()	1
+../Core/Src/app/Lights.cpp:73:6:void Lights::applyOne_(LightMode, bool, bool)	5
+../Core/Src/app/Lights.cpp:88:6:void Lights::write_(bool, bool)	4

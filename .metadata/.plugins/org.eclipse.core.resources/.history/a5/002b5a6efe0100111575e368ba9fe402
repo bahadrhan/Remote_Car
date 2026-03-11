@@ -1,0 +1,257 @@
+#include "stm32f0xx.h"
+
+#include <cstdint>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/BoardPins.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/Uart.hpp"
+
+#include "app/Parameters.hpp"
+#include "app/Command.hpp"
+#include "app/CommandExecutor.hpp"
+
+#include "app/MotorDriver.hpp"
+#include "app/Lights.hpp"
+
+#include "sensors/UltrasonicSensor.hpp"
+
+static bool buttonDown()
+{
+    // PC13 active-low. With pull-up: idle=1, pressed=0
+    return !Gpio::read(BoardPins::BTN_PORT, BoardPins::BTN_PIN);
+}
+
+static bool startsWith(const char* s, const char* pfx)
+{
+    return std::strncmp(s, pfx, std::strlen(pfx)) == 0;
+}
+
+static bool uartReadLine(char* buf, size_t bufLen)
+{
+    static size_t idx = 0;
+
+    uint8_t b = 0;
+    while (Uart::readByte(b))
+    {
+        const char c = static_cast<char>(b);
+
+        if (c == '\r') continue;
+
+        if (c == '\n')
+        {
+            buf[idx] = '\0';
+            idx = 0;
+            return true;
+        }
+
+        if (idx < (bufLen - 1))
+            buf[idx++] = c;
+        else
+            idx = 0; // overflow -> reset
+    }
+    return false;
+}
+
+static void uartWritef(const char* fmt, ...)
+{
+    char out[96];
+    va_list args;
+    va_start(args, fmt);
+    std::vsnprintf(out, sizeof(out), fmt, args);
+    va_end(args);
+    Uart::write(out);
+}
+
+static void replyAck(const char* s)
+{
+    Uart::write("ACK ");
+    Uart::write(s);
+    Uart::write("\n");
+}
+
+static void replyErr(const char* s)
+{
+    Uart::write("ERR ");
+    Uart::write(s);
+    Uart::write("\n");
+}
+
+static void handleLine(const char* line,
+                       CommandExecutor& exec,
+                       Parameters& params,
+                       UltrasonicSensor& frontUS,
+                       UltrasonicSensor& rearUS)
+{
+    if (std::strcmp(line, "PING") == 0)
+    {
+        replyAck("PONG");
+        return;
+    }
+
+    if (std::strcmp(line, "GET SENS") == 0)
+    {
+        uint32_t f = 0, r = 0;
+        bool okF = frontUS.measureOnce(f);
+        bool okR = rearUS.measureOnce(r);
+
+        // Print in one line for easy parsing
+        uartWritef("SENS FRONT=%ld REAR=%ld\n",
+                   okF ? (long)f : -1L,
+                   okR ? (long)r : -1L);
+        return;
+    }
+
+    if (startsWith(line, "CMD "))
+    {
+        const char x = line[4];
+        Command cmd{};
+        cmd.value = 0;
+
+        if      (x == 'F') cmd.type = CommandType::Forward;
+        else if (x == 'B') cmd.type = CommandType::Backward;
+        else if (x == 'L') cmd.type = CommandType::TurnLeft;
+        else if (x == 'R') cmd.type = CommandType::TurnRight;
+        else if (x == 'S') cmd.type = CommandType::Stop;
+        else { replyErr("CMD"); return; }
+
+        exec.apply(cmd);
+
+        // ACK exactly what we got
+        char a[16];
+        std::snprintf(a, sizeof(a), "CMD %c", x);
+        replyAck(a);
+        return;
+    }
+
+    if (startsWith(line, "SPD "))
+    {
+        int v = std::atoi(line + 4);
+        if (v < 0) v = 0;
+        if (v > 100) v = 100;
+
+        exec.apply({CommandType::SetSpeed, static_cast<uint8_t>(v)});
+        uartWritef("ACK SPD %d\n", v);
+        return;
+    }
+
+    if (startsWith(line, "LIGHT "))
+    {
+        int en = std::atoi(line + 6);
+        exec.apply({CommandType::EnableLights, static_cast<uint8_t>(en ? 1 : 0)});
+        replyAck(en ? "LIGHT 1" : "LIGHT 0");
+        return;
+    }
+
+    if (startsWith(line, "SENS "))
+    {
+        int en = std::atoi(line + 5);
+        exec.apply({CommandType::EnableSensors, static_cast<uint8_t>(en ? 1 : 0)});
+        params.sensorsEnabled = (en != 0);
+        replyAck(en ? "SENS 1" : "SENS 0");
+        return;
+    }
+
+    if (startsWith(line, "AUTO "))
+    {
+        int en = std::atoi(line + 5);
+        exec.apply({CommandType::EnableAutoMode, static_cast<uint8_t>(en ? 1 : 0)});
+        params.autoModeEnabled = (en != 0);
+        replyAck(en ? "AUTO 1" : "AUTO 0");
+        return;
+    }
+
+    replyErr("UNKNOWN");
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    // Button (PC13 active-low): use internal pull-up so it doesn't float
+    Clock::enableGpioClock(BoardPins::BTN_PORT);
+    Gpio::configureInput(BoardPins::BTN_PORT, BoardPins::BTN_PIN, Gpio::Pull::Up);
+
+    // UART
+    Uart::init(115200);
+    Uart::write("STM32 READY\n");
+
+    // Motor + lights
+    MotorDriver motor;
+    motor.init();
+    motor.enable();
+
+    Lights lights;
+    lights.init();
+
+    // Ultrasonic sensors (front + rear)
+    UltrasonicSensor usFront(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN,
+                             BoardPins::US_ECHO_PORT, BoardPins::US_ECHO_PIN);
+
+    UltrasonicSensor usRear(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN,
+                            BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN);
+
+    usFront.init();
+    usRear.init();
+
+    // Params
+    Parameters params;
+    params.defaultSpeedPercent = 60;
+    params.lightsEnabled       = true;
+    params.sensorsEnabled      = false;   // start OFF, enable from ESP32 with "SENS 1"
+    params.autoModeEnabled     = false;
+
+    // Executor
+    CommandExecutor exec;
+    exec.init(motor, lights, params);
+
+    // Safe startup
+    exec.apply({CommandType::Stop, 0});
+    replyAck("CMD S");
+
+    char line[64];
+
+    // Simple debounced emergency stop via button
+    bool lastBtn = false;
+    uint32_t lastTelMs = 0;
+
+    while (1)
+    {
+        // Button stop (debounce-ish)
+        bool b = buttonDown();
+        if (b && !lastBtn)
+        {
+            exec.apply({CommandType::Stop, 0});
+            replyAck("BTN STOP");
+        }
+        lastBtn = b;
+
+        // UART commands
+        if (uartReadLine(line, sizeof(line)))
+        {
+            handleLine(line, exec, params, usFront, usRear);
+        }
+
+        // Telemetry when enabled
+        const uint32_t now = Timebase::millis();
+        if (params.sensorsEnabled && (now - lastTelMs) >= 200)
+        {
+            lastTelMs = now;
+
+            uint32_t f = 0, r = 0;
+            bool okF = usFront.measureOnce(f);
+            bool okR = usRear.measureOnce(r);
+
+            uartWritef("TEL USF=%ld USR=%ld\n",
+                       okF ? (long)f : -1L,
+                       okR ? (long)r : -1L);
+        }
+
+        Timebase::delayMs(2);
+    }
+}

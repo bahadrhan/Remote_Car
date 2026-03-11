@@ -1,0 +1,152 @@
+#include "stm32f0xx.h"
+
+#include <cstdint>
+#include <cstring>
+#include <cstdlib>
+
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/BoardPins.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/Uart.hpp"
+
+#include "app/Parameters.hpp"
+#include "app/Command.hpp"
+#include "app/CommandExecutor.hpp"
+
+#include "app/MotorDriver.hpp"
+#include "app/Lights.hpp"
+
+// PC13 active-low
+static bool buttonDown()
+{
+    return !Gpio::read(BoardPins::BTN_PORT, BoardPins::BTN_PIN);
+}
+
+static bool readLine(Uart& uart, char* out, size_t maxLen)
+{
+    static size_t idx = 0;
+
+    while (uart.available())
+    {
+        char c = uart.readChar();
+        if (c == '\r') continue;
+
+        if (c == '\n')
+        {
+            out[idx] = '\0';
+            idx = 0;
+            return true;
+        }
+
+        if (idx < maxLen - 1)
+            out[idx++] = c;
+    }
+    return false;
+}
+
+static bool startsWith(const char* s, const char* pfx)
+{
+    return std::strncmp(s, pfx, std::strlen(pfx)) == 0;
+}
+
+static void handleCommand(const char* line,
+                          CommandExecutor& exec,
+                          Parameters& params,
+                          uint32_t now)
+{
+    (void)now;
+
+    // ---- Motion commands ----
+    if (startsWith(line, "CMD "))
+    {
+        char c = line[4];
+
+        Command cmd{};
+        cmd.value = 0;
+
+        if      (c == 'F') cmd.type = CommandType::Forward;
+        else if (c == 'B') cmd.type = CommandType::Backward;
+        else if (c == 'L') cmd.type = CommandType::TurnLeft;
+        else if (c == 'R') cmd.type = CommandType::TurnRight;
+        else if (c == 'S') cmd.type = CommandType::Stop;
+        else return;
+
+        exec.apply(cmd);
+        return;
+    }
+
+    // ---- Speed ----
+    if (startsWith(line, "SPD "))
+    {
+        int v = std::atoi(&line[4]);
+        if (v < 0) v = 0;
+        if (v > 100) v = 100;
+
+        exec.apply({CommandType::SetSpeed, static_cast<uint8_t>(v)});
+        return;
+    }
+
+    // ---- Lights ----
+    if (startsWith(line, "LIGHT "))
+    {
+        int en = std::atoi(&line[6]);
+        exec.apply({CommandType::EnableLights, static_cast<uint8_t>(en ? 1 : 0)});
+        return;
+    }
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    // Button
+    Clock::enableGpioClock(BoardPins::BTN_PORT);
+    Gpio::configureInput(BoardPins::BTN_PORT, BoardPins::BTN_PIN, Gpio::Pull::None);
+
+    // UART
+    Uart uart;
+    uart.init(115200);
+
+    // Motor + lights
+    MotorDriver motor;
+    motor.init();
+    motor.enable();
+
+    Lights lights;
+    lights.init();
+
+    // Parameters
+    Parameters params;
+    params.defaultSpeedPercent = 60;
+    params.lightsEnabled = true;
+
+    // Command executor
+    CommandExecutor exec;
+    exec.init(motor, lights, params);
+
+    // Start STOPPED
+    exec.apply({CommandType::Stop, 0});
+
+    char rxLine[64];
+
+    while (1)
+    {
+        const uint32_t now = Timebase::millis();
+
+        // ---- Local emergency stop ----
+        if (buttonDown())
+        {
+            exec.apply({CommandType::Stop, 0});
+        }
+
+        // ---- UART commands ----
+        if (readLine(uart, rxLine, sizeof(rxLine)))
+        {
+            handleCommand(rxLine, exec, params, now);
+        }
+
+        Timebase::delayMs(10);
+    }
+}

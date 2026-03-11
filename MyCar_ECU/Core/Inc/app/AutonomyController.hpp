@@ -1,0 +1,39 @@
+#pragma once
+
+#include <cstdint>
+#include "app/Command.hpp"
+
+class Parameters;
+class UltrasonicSensor;
+
+class AutonomyController
+{
+public:
+    void init(Parameters& params,
+              UltrasonicSensor& frontSensor,
+              UltrasonicSensor& rearSensor);
+
+    Command update(uint32_t nowMs);
+
+    void reset();
+
+private:
+    enum class State : uint8_t
+    {
+        Forward,
+        Reverse,
+        Turn,
+        Stop
+    };
+
+    bool frontBlocked_();
+    bool rearBlocked_();
+
+private:
+    Parameters* params_ = nullptr;
+    UltrasonicSensor* front_ = nullptr;
+    UltrasonicSensor* rear_ = nullptr;
+
+    State state_ = State::Forward;
+    uint32_t stateSinceMs_ = 0;
+};

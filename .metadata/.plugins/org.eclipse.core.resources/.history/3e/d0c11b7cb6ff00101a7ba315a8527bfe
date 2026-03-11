@@ -1,0 +1,67 @@
+#include "stm32f0xx.h"
+
+#include "hw/Clock.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/BoardPins.hpp"
+
+#include "sensors/RearUltrasonicSensor.hpp"
+
+// Rear obstacle threshold: 5 cm
+static constexpr uint32_t ON_MM  = 50;  // <= 50 mm -> stoplight ON
+static constexpr uint32_t OFF_MM = 80;  // >= 80 mm -> stoplight OFF (hysteresis)
+
+// HC-SR04 recommended trigger period >= ~60ms
+static constexpr uint32_t MEASURE_PERIOD_MS = 70;
+
+static inline void initStoplightOff()
+{
+    Clock::enableGpioClock(BoardPins::STOPLIGHT_PORT);
+    Gpio::configureOutput(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+    Gpio::setLow(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+}
+
+static inline bool hysteresis(bool currentlyOn, uint32_t mm)
+{
+    // If measurement failed (or invalid), keep state
+    if (mm == 0) return currentlyOn;
+
+    if (!currentlyOn)
+        return (mm <= ON_MM);      // turn ON when close
+    else
+        return (mm < OFF_MM);      // stay ON until clearly far
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    initStoplightOff();
+
+    RearUltrasonicSensor rearUs;
+    rearUs.init();
+
+    uint32_t lastMeasureMs = 0;
+    uint32_t rearMm = 0;
+    bool stoplightOn = false;
+
+    for (;;)
+    {
+        const uint32_t now = Timebase::millis();
+
+        if (now - lastMeasureMs >= MEASURE_PERIOD_MS)
+        {
+            lastMeasureMs = now;
+
+            uint32_t mm = 0;
+            if (rearUs.measureOnce(mm))
+                rearMm = mm; // keep last good distance
+        }
+
+        stoplightOn = hysteresis(stoplightOn, rearMm);
+
+        if (stoplightOn) Gpio::setHigh(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+        else             Gpio::setLow (BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+    }
+}

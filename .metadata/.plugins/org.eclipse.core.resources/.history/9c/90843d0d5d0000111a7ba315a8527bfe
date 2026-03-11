@@ -1,0 +1,79 @@
+#pragma once
+
+#include <cstdint>
+#include "stm32f0xx.h"
+
+namespace BoardPins
+{
+    static  GPIO_TypeDef* STBY_PORT = GPIOB;
+    static constexpr uint16_t      STBY_PIN  = (1u << 3);   // PB3
+
+    // Front Left motor
+    static  GPIO_TypeDef* FL_IN1_PORT = GPIOB;
+    static constexpr uint16_t      FL_IN1_PIN  = (1u << 4); // PB4
+    static  GPIO_TypeDef* FL_IN2_PORT = GPIOB;
+    static constexpr uint16_t      FL_IN2_PIN  = (1u << 5); // PB5
+
+    // Rear Left motor
+    static  GPIO_TypeDef* RL_IN1_PORT = GPIOB;
+    static constexpr uint16_t      RL_IN1_PIN  = (1u << 6); // PB6
+    static  GPIO_TypeDef* RL_IN2_PORT = GPIOB;
+    static constexpr uint16_t      RL_IN2_PIN  = (1u << 7); // PB7
+
+    // Front Right motor
+    static  GPIO_TypeDef* FR_IN1_PORT = GPIOB;
+    static constexpr uint16_t      FR_IN1_PIN  = (1u << 8); // PB8
+    static  GPIO_TypeDef* FR_IN2_PORT = GPIOB;
+    static constexpr uint16_t      FR_IN2_PIN  = (1u << 9); // PB9
+
+    // Rear Right motor
+    static  GPIO_TypeDef* RR_IN1_PORT = GPIOB;
+    static constexpr uint16_t      RR_IN1_PIN  = (1u << 10); // PB10
+    static  GPIO_TypeDef* RR_IN2_PORT = GPIOB;
+    static constexpr uint16_t      RR_IN2_PIN  = (1u << 11); // PB11
+
+    // Ultrasonic (HC-SR04)
+    static GPIO_TypeDef* US_ECHO_PORT = GPIOA;
+    static constexpr uint16_t US_ECHO_PIN  = (1u << 0); // PA0
+
+    static GPIO_TypeDef* US_TRIG_PORT = GPIOA;
+    static constexpr uint16_t US_TRIG_PIN  = (1u << 1); // PA1
+
+    //Ultrasonic Rear
+
+    static GPIO_TypeDef* US_REAR_TRIG_PORT = GPIOC;
+    static constexpr uint16_t US_REAR_TRIG_PIN = (1u << 0); // PC0
+
+    static GPIO_TypeDef* US_REAR_ECHO_PORT = GPIOC;
+    static constexpr uint16_t US_REAR_ECHO_PIN = (1u << 1); // PC1
+
+
+    // headline - PA5
+    static GPIO_TypeDef* HEADLIGHT_PORT = GPIOA;
+    static constexpr uint16_t      HEADLIGHT_PIN  = (1u << 5);
+    // Stop light (rear red LED)
+
+    static  GPIO_TypeDef* STOPLIGHT_PORT = GPIOA;
+    static constexpr uint16_t      STOPLIGHT_PIN  = (1u << 4); // PA4
+
+    // UART
+    static GPIO_TypeDef* UART_PORT = GPIOA;
+    static constexpr uint16_t UART_TX_PIN = (1u << 9);   // PA9
+    static constexpr uint16_t UART_RX_PIN = (1u << 10);  // PA10
+    static USART_TypeDef* UART = USART1;
+
+
+
+
+
+
+    // CH1: PA6, CH2: PA7, CH3: PB0, CH4: PB1
+    static  GPIO_TypeDef* PWM_CH1_PORT = GPIOA;
+    static constexpr uint16_t      PWM_CH1_PIN  = (1u << 6); // PA6
+    static  GPIO_TypeDef* PWM_CH2_PORT = GPIOA;
+    static constexpr uint16_t      PWM_CH2_PIN  = (1u << 7); // PA7
+    static  GPIO_TypeDef* PWM_CH3_PORT = GPIOB;
+    static constexpr uint16_t      PWM_CH3_PIN  = (1u << 0); // PB0
+    static  GPIO_TypeDef* PWM_CH4_PORT = GPIOB;
+    static constexpr uint16_t      PWM_CH4_PIN  = (1u << 1); // PB1
+}

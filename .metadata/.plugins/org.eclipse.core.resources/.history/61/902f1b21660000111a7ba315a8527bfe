@@ -1,0 +1,40 @@
+#include "stm32f0xx.h"
+
+#include "hw/BoardPins.hpp"
+#include "hw/Clock.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/Timebase.hpp"
+
+#include "sensors/UltrasonicSensor.hpp"
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    Clock::enableGpioClock(BoardPins::HEADLIGHT_PORT);
+    Gpio::configureOutput(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+    Gpio::setLow(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+
+    UltrasonicSensor sensor;
+    sensor.init();
+
+    const uint32_t threshold_mm = 250;
+
+    while (1)
+    {
+        uint32_t dist_mm = 0;
+        bool ok = sensor.measureOnce(dist_mm);
+
+        if (ok && dist_mm > 0 && dist_mm <= threshold_mm)
+        {
+            Gpio::setHigh(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+        }
+        else
+        {
+            Gpio::setLow(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+        }
+
+        Timebase::delayMs(80);
+    }
+}

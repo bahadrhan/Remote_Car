@@ -1,0 +1,181 @@
+#include "stm32f0xx.h"
+
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/BoardPins.hpp"
+#include "hw/Gpio.hpp"
+
+#include "app/MotorDriver.hpp"
+
+// ---------------- ultrasonic helpers ----------------
+static bool waitEcho(GPIO_TypeDef* port, uint16_t pin, bool level, uint32_t timeout_us)
+{
+    for (uint32_t i = 0; i < timeout_us; ++i)
+    {
+        if (Gpio::read(port, pin) == level)
+            return true;
+        Timebase::delayUs(1);
+    }
+    return false;
+}
+
+static uint32_t measureEchoUs(GPIO_TypeDef* port, uint16_t pin)
+{
+    if (!waitEcho(port, pin, true, 30000))
+        return 0;
+
+    uint32_t w = 0;
+    while (w < 30000)
+    {
+        if (!Gpio::read(port, pin))
+            break;
+        ++w;
+        Timebase::delayUs(1);
+    }
+    return w;
+}
+
+static uint32_t usToMm(uint32_t us)
+{
+    return (us * 10u) / 58u;
+}
+
+// ---------------- button ----------------
+static bool buttonPressed()
+{
+    static bool last = false;
+    bool now = !Gpio::read(BoardPins::BTN_PORT, BoardPins::BTN_PIN); // PC13 active low
+    bool pressed = (now && !last);
+    last = now;
+    return pressed;
+}
+
+// ---------------- main ----------------
+enum class Dir : uint8_t { Forward, Backward };
+enum class RunState : uint8_t { Running, Paused };
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    // ---------- GPIO ----------
+    Clock::enableGpioClock(BoardPins::HEADLIGHT_PORT);
+    Clock::enableGpioClock(BoardPins::STOPLIGHT_PORT);
+    Clock::enableGpioClock(BoardPins::BTN_PORT);
+
+    Gpio::configureOutput(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+    Gpio::configureOutput(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+    Gpio::configureInput (BoardPins::BTN_PORT, BoardPins::BTN_PIN);
+
+    auto headOn  = [] { Gpio::setHigh(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN); };
+    auto headOff = [] { Gpio::setLow (BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN); };
+    auto stopOn  = [] { Gpio::setHigh(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN); };
+    auto stopOff = [] { Gpio::setLow (BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN); };
+
+    // ---------- Ultrasonic ----------
+    Clock::enableGpioClock(BoardPins::US_TRIG_PORT);
+    Clock::enableGpioClock(BoardPins::US_ECHO_PORT);
+    Clock::enableGpioClock(BoardPins::US_REAR_TRIG_PORT);
+    Clock::enableGpioClock(BoardPins::US_REAR_ECHO_PORT);
+
+    Gpio::configureOutput(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN);
+    Gpio::configureInput (BoardPins::US_ECHO_PORT, BoardPins::US_ECHO_PIN);
+    Gpio::configureOutput(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+    Gpio::configureInput (BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN);
+
+    // ---------- Motor ----------
+    MotorDriver motor;
+    motor.init();
+    motor.enable();
+    motor.setSpeedPercent(70);
+
+    const uint32_t threshold_mm = 300;
+
+    Dir dir = Dir::Forward;
+    RunState run = RunState::Running;
+
+    auto goForward = [&] {
+        headOn();
+        stopOff();
+        motor.forward();
+        dir = Dir::Forward;
+    };
+
+    auto goBackward = [&] {
+        headOff();
+        stopOff();
+        motor.back();
+        dir = Dir::Backward;
+    };
+
+    auto pause = [&] {
+        motor.stop();
+        stopOn();
+        run = RunState::Paused;
+    };
+
+    auto resume = [&] {
+        stopOff();
+        run = RunState::Running;
+        (dir == Dir::Forward) ? goForward() : goBackward();
+    };
+
+    auto stopAndSwitch = [&] {
+        motor.stop();
+        stopOn();
+        Timebase::delayMs(3000);
+        stopOff();
+        (dir == Dir::Forward) ? goBackward() : goForward();
+    };
+
+    goForward();
+
+    // ---------- main loop ----------
+    while (1)
+    {
+        // Manual button override
+        if (buttonPressed())
+        {
+            if (run == RunState::Running)
+                pause();
+            else
+                resume();
+        }
+
+        if (run == RunState::Paused)
+        {
+            Timebase::delayMs(20);
+            continue;
+        }
+
+        if (dir == Dir::Forward)
+        {
+            Gpio::setHigh(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN);
+            Timebase::delayUs(10);
+            Gpio::setLow(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN);
+
+            uint32_t echo = measureEchoUs(BoardPins::US_ECHO_PORT,
+                                          BoardPins::US_ECHO_PIN);
+            uint32_t dist = (echo == 0) ? 0 : usToMm(echo);
+
+            if (echo && dist <= threshold_mm)
+                stopAndSwitch();
+        }
+        else
+        {
+            Gpio::setHigh(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+            Timebase::delayUs(10);
+            Gpio::setLow(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+
+            uint32_t echo = measureEchoUs(BoardPins::US_REAR_ECHO_PORT,
+                                          BoardPins::US_REAR_ECHO_PIN);
+            uint32_t dist = (echo == 0) ? 0 : usToMm(echo);
+
+            if (echo && dist <= threshold_mm)
+                stopAndSwitch();
+        }
+
+        Timebase::delayMs(120);
+    }
+}

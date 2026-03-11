@@ -1,0 +1,67 @@
+#include "sensors/RearUltrasonicSensor.hpp"
+
+#include "hw/BoardPins.hpp"
+#include "hw/Clock.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/Timebase.hpp"
+
+void RearUltrasonicSensor::init()
+{
+    Clock::enableGpioClock(BoardPins::US_REAR_TRIG_PORT);
+    Clock::enableGpioClock(BoardPins::US_REAR_ECHO_PORT);
+
+    Gpio::configureOutput(BoardPins::US_REAR_TRIG_PORT,
+                          BoardPins::US_REAR_TRIG_PIN);
+
+    Gpio::configureInput(BoardPins::US_REAR_ECHO_PORT,
+                         BoardPins::US_REAR_ECHO_PIN);
+
+    Gpio::setLow(BoardPins::US_REAR_TRIG_PORT,
+                 BoardPins::US_REAR_TRIG_PIN);
+
+    Timebase::delayUs(10);
+}
+
+void RearUltrasonicSensor::trigPulse10us_()
+{
+    Gpio::setHigh(BoardPins::US_REAR_TRIG_PORT,
+                  BoardPins::US_REAR_TRIG_PIN);
+    Timebase::delayUs(10);
+    Gpio::setLow(BoardPins::US_REAR_TRIG_PORT,
+                 BoardPins::US_REAR_TRIG_PIN);
+}
+
+bool RearUltrasonicSensor::waitForLevel_(bool high, uint32_t timeout_us)
+{
+    const uint32_t start = Timebase::micros();
+
+    while ((Timebase::micros() - start) < timeout_us)
+    {
+        if (Gpio::read(BoardPins::US_REAR_ECHO_PORT,
+                       BoardPins::US_REAR_ECHO_PIN) == high)
+        {
+            return true;
+        }
+        __NOP();
+    }
+    return false;
+}
+
+uint32_t RearUltrasonicSensor::measureEchoHighUs_(uint32_t timeout_us)
+{
+    if (!waitForLevel_(true, timeout_us))
+        return 0;
+
+    const uint32_t t0 = Timebase::micros();
+
+    if (!waitForLevel_(false, timeout_us))
+        return 0;
+
+    const uint32_t t1 = Timebase::micros();
+    return (t1 - t0);
+}
+
+uint32_t RearUltrasonicSensor::usToMm_(uint32_t echo_high_us)
+{
+    // HC-SR04: distance(mm) ≈ echo_us * 10 / 58
+    return (e

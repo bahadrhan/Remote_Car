@@ -1,0 +1,162 @@
+13:56:47 **** Incremental Build of configuration Debug for project MyCar_ECU ****
+make -j16 all 
+arm-none-eabi-g++ "../Core/Src/main.cpp" -mcpu=cortex-m0 -std=gnu++14 -g3 -DDEBUG -DSTM32F091xC -c -I../Core/Inc -I../Drivers/CMSIS/Device/ST/STM32F0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -fno-exceptions -fno-rtti -fno-use-cxa-atexit -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+In file included from ../Core/Src/main.cpp:8:
+../Core/Inc/hw/BoardPins.hpp:11:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   11 |     inline GPIO_TypeDef* const STBY_PORT = GPIOB;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:12:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   12 |     inline constexpr uint16_t  STBY_PIN  = (1u << 3);   // PB3
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:19:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   19 |     inline GPIO_TypeDef* const FL_IN1_PORT = GPIOB;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:20:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   20 |     inline constexpr uint16_t  FL_IN1_PIN  = (1u << 4); // PB4
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:21:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   21 |     inline GPIO_TypeDef* const FL_IN2_PORT = GPIOB;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:22:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   22 |     inline constexpr uint16_t  FL_IN2_PIN  = (1u << 5); // PB5
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:25:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   25 |     inline GPIO_TypeDef* const RL_IN1_PORT = GPIOB;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:26:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   26 |     inline constexpr uint16_t  RL_IN1_PIN  = (1u << 6); // PB6
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:27:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   27 |     inline GPIO_TypeDef* const RL_IN2_PORT = GPIOB;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:28:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   28 |     inline constexpr uint16_t  RL_IN2_PIN  = (1u << 7); // PB7
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:31:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   31 |     inline GPIO_TypeDef* const FR_IN1_PORT = GPIOB;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:32:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   32 |     inline constexpr uint16_t  FR_IN1_PIN  = (1u << 8); // PB8
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:33:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   33 |     inline GPIO_TypeDef* const FR_IN2_PORT = GPIOB;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:34:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   34 |     inline constexpr uint16_t  FR_IN2_PIN  = (1u << 9); // PB9
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:37:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   37 |     inline GPIO_TypeDef* const RR_IN1_PORT = GPIOB;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:38:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   38 |     inline constexpr uint16_t  RR_IN1_PIN  = (1u << 10); // PB10
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:39:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   39 |     inline GPIO_TypeDef* const RR_IN2_PORT = GPIOB;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:40:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   40 |     inline constexpr uint16_t  RR_IN2_PIN  = (1u << 11); // PB11
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:43:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   43 |     inline constexpr uint16_t LEFT_IN1_MASK  = FL_IN1_PIN | RL_IN1_PIN;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:44:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   44 |     inline constexpr uint16_t LEFT_IN2_MASK  = FL_IN2_PIN | RL_IN2_PIN;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:45:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   45 |     inline constexpr uint16_t RIGHT_IN1_MASK = FR_IN1_PIN | RR_IN1_PIN;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:46:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   46 |     inline constexpr uint16_t RIGHT_IN2_MASK = FR_IN2_PIN | RR_IN2_PIN;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:53:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   53 |     inline GPIO_TypeDef* const US_ECHO_PORT = GPIOA;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:54:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   54 |     inline constexpr uint16_t  US_ECHO_PIN  = (1u << 0); // PA0
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:55:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   55 |     inline GPIO_TypeDef* const US_TRIG_PORT = GPIOA;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:56:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   56 |     inline constexpr uint16_t  US_TRIG_PIN  = (1u << 1); // PA1
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:59:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   59 |     inline GPIO_TypeDef* const US_REAR_TRIG_PORT = GPIOC;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:60:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   60 |     inline constexpr uint16_t  US_REAR_TRIG_PIN  = (1u << 0); // PC0
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:61:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   61 |     inline GPIO_TypeDef* const US_REAR_ECHO_PORT = GPIOC;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:62:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   62 |     inline constexpr uint16_t  US_REAR_ECHO_PIN  = (1u << 1); // PC1
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:68:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   68 |     inline GPIO_TypeDef* const HEADLIGHT_PORT = GPIOA;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:69:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   69 |     inline constexpr uint16_t  HEADLIGHT_PIN  = (1u << 5); // PA5
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:72:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   72 |     inline GPIO_TypeDef* const STOPLIGHT_PORT = GPIOA;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:73:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   73 |     inline constexpr uint16_t  STOPLIGHT_PIN  = (1u << 4); // PA4
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:77:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   77 |     inline GPIO_TypeDef* const UART_PORT  = GPIOA;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:78:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   78 |     inline constexpr uint16_t  UART_TX_PIN = (1u << 9);   // PA9
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:79:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   79 |     inline constexpr uint16_t  UART_RX_PIN = (1u << 10);  // PA10
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:80:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   80 |     inline USART_TypeDef* const UART = USART1;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:84:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   84 |     inline GPIO_TypeDef* const BTN_PORT = GPIOC;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:85:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   85 |     inline constexpr uint16_t  BTN_PIN  = (1u << 13); // PC13
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:89:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   89 |     inline GPIO_TypeDef* const PWM_CH1_PORT = GPIOA;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:90:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   90 |     inline constexpr uint16_t  PWM_CH1_PIN  = (1u << 6); // PA6
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:92:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   92 |     inline GPIO_TypeDef* const PWM_CH2_PORT = GPIOA;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:93:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   93 |     inline constexpr uint16_t  PWM_CH2_PIN  = (1u << 7); // PA7
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:95:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   95 |     inline GPIO_TypeDef* const PWM_CH3_PORT = GPIOB;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:96:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   96 |     inline constexpr uint16_t  PWM_CH3_PIN  = (1u << 0); // PB0
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:98:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   98 |     inline GPIO_TypeDef* const PWM_CH4_PORT = GPIOB;
+      |     ^~~~~~
+../Core/Inc/hw/BoardPins.hpp:99:5: warning: inline variables are only available with '-std=c++17' or '-std=gnu++17' [-Wc++17-extensions]
+   99 |     inline constexpr uint16_t  PWM_CH4_PIN  = (1u << 1); // PB1
+      |     ^~~~~~
+arm-none-eabi-g++ -o "MyCar_ECU.elf" @"objects.list"   -mcpu=cortex-m0 -T"D:\playground\STm32_Car_project\MyCar_ECU\STM32F091RCTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="MyCar_ECU.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group
+Finished building target: MyCar_ECU.elf
+ 
+arm-none-eabi-size  MyCar_ECU.elf 
+arm-none-eabi-objdump -h -S MyCar_ECU.elf  > "MyCar_ECU.list"
+   text	   data	    bss	    dec	    hex	filename
+  11428	    120	   1992	  13540	   34e4	MyCar_ECU.elf
+Finished building: default.size.stdout
+ 
+Finished building: MyCar_ECU.list
+ 
+
+13:56:48 Build Finished. 0 errors, 48 warnings. (took 1s.33ms)
+

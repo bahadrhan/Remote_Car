@@ -1,0 +1,62 @@
+#include "stm32f0xx.h"
+
+#include "hw/BoardPins.hpp"
+#include "hw/Clock.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/Timebase.hpp"
+
+#include "app/MotorDriver.hpp"
+
+static inline bool buttonPressed()
+{
+    return !Gpio::read(BoardPins::BTN_PORT, BoardPins::BTN_PIN);
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    Clock::enableGpioClock(BoardPins::BTN_PORT);
+    Gpio::configureInput(BoardPins::BTN_PORT, BoardPins::BTN_PIN, Gpio::Pull::Up);
+
+    MotorDriver motor;
+    motor.init();
+    motor.enable();
+    motor.setSpeedPercent(100);
+
+    bool running = true;
+    motor.forward();
+
+    bool last = false;
+
+    while (1)
+    {
+        bool now = buttonPressed();
+
+        if (now && !last)
+        {
+            Timebase::delayMs(30);
+
+            if (buttonPressed())
+            {
+                running = !running;
+
+                if (running)
+                {
+                    motor.forward();
+                }
+                else
+                {
+                    motor.stop();
+                }
+
+                while (buttonPressed())
+                    Timebase::delayMs(5);
+            }
+        }
+
+        last = now;
+        Timebase::delayMs(5);
+    }
+}

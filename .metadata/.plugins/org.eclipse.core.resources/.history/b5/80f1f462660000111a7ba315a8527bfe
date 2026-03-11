@@ -1,0 +1,90 @@
+#include "stm32f0xx.h"
+
+#include "hw/BoardPins.hpp"
+#include "hw/Clock.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/Timebase.hpp"
+
+#include "sensors/UltrasonicSensor.hpp"
+
+static inline bool btnDown()
+{
+    return !Gpio::read(BoardPins::BTN_PORT, BoardPins::BTN_PIN);
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    Clock::enableGpioClock(BoardPins::BTN_PORT);
+    Gpio::configureInput(BoardPins::BTN_PORT, BoardPins::BTN_PIN, Gpio::Pull::Up);
+
+    Clock::enableGpioClock(BoardPins::HEADLIGHT_PORT);
+    Clock::enableGpioClock(BoardPins::STOPLIGHT_PORT);
+    Gpio::configureOutput(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+    Gpio::configureOutput(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+
+    Gpio::setLow(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+    Gpio::setLow(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+
+    UltrasonicSensor front(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN,
+                           BoardPins::US_ECHO_PORT, BoardPins::US_ECHO_PIN);
+
+    UltrasonicSensor rear(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN,
+                          BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN);
+
+    front.init();
+    rear.init();
+
+    const uint32_t threshold_mm = 250;
+
+    bool testRear = false;
+    bool last = false;
+
+    while (1)
+    {
+        bool down = btnDown();
+
+        if (down && !last)
+        {
+            Timebase::delayMs(30);
+            if (btnDown())
+            {
+                testRear = !testRear;
+
+                while (btnDown())
+                    Timebase::delayMs(5);
+            }
+        }
+        last = down;
+
+        uint32_t dist_mm = 0;
+        bool ok = false;
+
+        if (!testRear)
+        {
+            ok = front.measureOnce(dist_mm);
+
+            if (ok && dist_mm > 0 && dist_mm <= threshold_mm)
+                Gpio::setHigh(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+            else
+                Gpio::setLow(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+
+            Gpio::setLow(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+        }
+        else
+        {
+            ok = rear.measureOnce(dist_mm);
+
+            if (ok && dist_mm > 0 && dist_mm <= threshold_mm)
+                Gpio::setHigh(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+            else
+                Gpio::setLow(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+
+            Gpio::setLow(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+        }
+
+        Timebase::delayMs(80);
+    }
+}

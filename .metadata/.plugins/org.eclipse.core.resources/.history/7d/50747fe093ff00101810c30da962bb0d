@@ -1,0 +1,76 @@
+#include "hw/Uart.hpp"
+#include "stm32f0xx.h"
+
+namespace Uart
+{
+    void init(uint32_t baud)
+    {
+        // 1. Enable GPIOA clock
+        RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
+
+        // 2. Enable USART2 clock
+        RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
+
+        // 3. Configure PA2 (TX) as Alternate Function
+        GPIOA->MODER &= ~(3u << (2*2));   // Clear
+        GPIOA->MODER |=  (2u << (2*2));   // Alternate function
+
+        // 4. Configure PA3 (RX) as Alternate Function
+        GPIOA->MODER &= ~(3u << (3*2));   // Clear
+        GPIOA->MODER |=  (2u << (3*2));   // Alternate function
+
+        // 5. Set Alternate Function 1 for USART2
+        GPIOA->AFR[0] &= ~(0xF << (2*4)); // Clear PA2 AF
+        GPIOA->AFR[0] |=  (0x1 << (2*4)); // AF1 for PA2
+
+        GPIOA->AFR[0] &= ~(0xF << (3*4)); // Clear PA3 AF
+        GPIOA->AFR[0] |=  (0x1 << (3*4)); // AF1 for PA3
+
+        // 6. Enable pull-up on RX
+        GPIOA->PUPDR &= ~(3u << (3*2));   // Clear
+        GPIOA->PUPDR |=  (1u << (3*2));   // Pull-up
+
+        // 7. Calculate baud rate (start with 9600)
+        // For 48MHz: 48000000 / 9600 = 5000
+        // BRR = USARTDIV = 5000
+        // Actually: BRR = fCK / baud
+        uint32_t brr_value = SystemCoreClock / baud;
+        USART2->BRR = brr_value;
+
+        // 8. Configure USART
+        USART2->CR1 = 0;  // Clear control register
+
+        // 9. Enable USART, TX, and RX
+        USART2->CR1 |= USART_CR1_UE;   // USART enable
+        USART2->CR1 |= USART_CR1_TE;   // Transmitter enable
+        USART2->CR1 |= USART_CR1_RE;   // Receiver enable
+
+        // 10. Clear status flags
+        USART2->ICR = 0xFFFFFFFF;
+    }
+
+    void writeByte(uint8_t b)
+    {
+        // Wait until TX buffer is empty
+        while (!(USART2->ISR & USART_ISR_TXE)) {}
+        USART2->TDR = b;
+    }
+
+    void write(const char* s)
+    {
+        while (*s)
+        {
+            writeByte((uint8_t)*s++);
+        }
+    }
+
+    bool readByte(uint8_t& out)
+    {
+        if (USART2->ISR & USART_ISR_RXNE)
+        {
+            out = (uint8_t)(USART2->RDR & 0xFFu);
+            return true;
+        }
+        return false;
+    }
+}

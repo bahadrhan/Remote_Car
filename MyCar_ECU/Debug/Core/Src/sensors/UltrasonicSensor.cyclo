@@ -1,0 +1,11 @@
+../Core/Src/sensors/UltrasonicSensor.cpp:9:1:UltrasonicSensor::UltrasonicSensor(GPIO_TypeDef*, uint16_t, GPIO_TypeDef*, uint16_t)	1
+../Core/Src/sensors/UltrasonicSensor.cpp:15:6:void UltrasonicSensor::tim2Init1MHzOnce_()	2
+../Core/Src/sensors/UltrasonicSensor.cpp:30:10:uint32_t UltrasonicSensor::nowUs_()	1
+../Core/Src/sensors/UltrasonicSensor.cpp:35:6:void UltrasonicSensor::init()	1
+../Core/Src/sensors/UltrasonicSensor.cpp:51:6:void UltrasonicSensor::guardTime_()	2
+../Core/Src/sensors/UltrasonicSensor.cpp:62:6:void UltrasonicSensor::trigPulse10us_()	1
+../Core/Src/sensors/UltrasonicSensor.cpp:73:6:bool UltrasonicSensor::waitForLevel_(bool, uint32_t)	3
+../Core/Src/sensors/UltrasonicSensor.cpp:84:10:uint32_t UltrasonicSensor::measureEchoHighUs_(uint32_t)	3
+../Core/Src/sensors/UltrasonicSensor.cpp:102:10:uint32_t UltrasonicSensor::usToMm_(uint32_t)	1
+../Core/Src/sensors/UltrasonicSensor.cpp:107:6:bool UltrasonicSensor::measureOnce(uint32_t&)	2
+../Core/Src/sensors/UltrasonicSensor.cpp:121:6:bool UltrasonicSensor::measureStable(uint32_t&)	7

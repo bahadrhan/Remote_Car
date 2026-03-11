@@ -1,0 +1,16 @@
+1769973788753	Delete resource 'trial'
+1769975012184	Delete resource 'trial'
+1769975016391	Delete resource 'project debug'
+1769977421568	Delete resource 'MyCar_ECU/Core/Src/devices'
+1769977424597	Delete resource 'MyCar_ECU/Core/Inc/devices'
+1769980611739	Delete resource 'MyCar_ECU/Core/Src/sensors/UltrasonicSensor.cpp'
+1769984892575	Delete 2 resources
+1769984896314	Delete 2 resources
+1770051679095	Delete resource 'MyCar_ECU/Core/Src/app/CommandRouter.cpp'
+1770051694125	Delete resource 'MyCar_ECU/Core/Inc/app/CommandRouter.hpp'
+1770051701654	Delete resource 'MyCar_ECU/Core/Inc/app/Telemetry.hpp'
+1770051705782	Delete resource 'MyCar_ECU/Core/Inc/cfg/Parameters.hpp'
+1770051709579	Delete resource 'MyCar_ECU/Core/Inc/cfg/ParameterStore.hpp'
+1770051712580	Delete resource 'MyCar_ECU/Core/Inc/cfg'
+1770051718093	Delete resource 'MyCar_ECU/Core/Src/cfg'
+1770055211485	Delete resource 'MyCar_ECU/Core/Inc/app/DriveCommand.hpp'

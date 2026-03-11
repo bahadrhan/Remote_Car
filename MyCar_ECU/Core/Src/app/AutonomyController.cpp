@@ -1,0 +1,93 @@
+#include "app/AutonomyController.hpp"
+
+#include "app/Parameters.hpp"
+#include "sensors/UltrasonicSensor.hpp"
+
+void AutonomyController::init(Parameters& params,
+                              UltrasonicSensor& frontSensor,
+                              UltrasonicSensor& rearSensor)
+{
+    params_ = &params;
+    front_  = &frontSensor;
+    rear_   = &rearSensor;
+
+    reset();
+}
+
+void AutonomyController::reset()
+{
+    state_ = State::Forward;
+    stateSinceMs_ = 0;
+}
+
+bool AutonomyController::frontBlocked_()
+{
+    if (!params_ || !front_) return false;
+    if (!params_->sensorsEnabled) return false;
+
+    uint32_t dist = 0;
+    if (front_->measureOnce(dist))
+        return dist <= params_->obstacleThresholdMm;
+
+    return false;
+}
+
+bool AutonomyController::rearBlocked_()
+{
+    if (!params_ || !rear_) return false;
+    if (!params_->sensorsEnabled) return false;
+
+    uint32_t dist = 0;
+    if (rear_->measureOnce(dist))
+        return dist <= params_->obstacleThresholdMm;
+
+    return false;
+}
+
+Command AutonomyController::update(uint32_t nowMs)
+{
+    if (!params_ || !front_ || !rear_)
+        return {CommandType::Stop, 0};
+
+    if (!params_->autoModeEnabled || !params_->sensorsEnabled)
+        return {CommandType::Stop, 0};
+
+    if (stateSinceMs_ == 0)
+        stateSinceMs_ = nowMs;
+
+    switch (state_)
+    {
+        case State::Forward:
+            if (frontBlocked_())
+            {
+                state_ = State::Reverse;
+                stateSinceMs_ = nowMs;
+                return {CommandType::Stop, 0};
+            }
+            return {CommandType::Forward, 0};
+
+        case State::Reverse:
+            if ((uint32_t)(nowMs - stateSinceMs_) >= params_->reverseTimeMs)
+            {
+                state_ = State::Turn;
+                stateSinceMs_ = nowMs;
+                return {CommandType::Stop, 0};
+            }
+            return {CommandType::Backward, 0};
+
+        case State::Turn:
+            if ((uint32_t)(nowMs - stateSinceMs_) >= params_->turnTimeMs)
+            {
+                state_ = State::Forward;
+                stateSinceMs_ = nowMs;
+                return {CommandType::Forward, 0};
+            }
+            return {CommandType::TurnLeft, 0};
+
+        case State::Stop:
+        default:
+            state_ = State::Forward;
+            stateSinceMs_ = nowMs;
+            return {CommandType::Stop, 0};
+    }
+}

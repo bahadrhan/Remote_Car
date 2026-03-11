@@ -1,0 +1,186 @@
+#include "app/MotorDriver.hpp"
+
+#include "hw/BoardPins.hpp"
+#include "hw/Clock.hpp"
+#include "hw/Gpio.hpp"
+
+#include "stm32f0xx.h"
+
+void MotorDriver::init()
+{
+    Clock::enableGpioClock(BoardPins::STBY_PORT);
+
+    Clock::enableGpioClock(BoardPins::FL_IN1_PORT);
+    Clock::enableGpioClock(BoardPins::FL_IN2_PORT);
+    Clock::enableGpioClock(BoardPins::RL_IN1_PORT);
+    Clock::enableGpioClock(BoardPins::RL_IN2_PORT);
+
+    Clock::enableGpioClock(BoardPins::FR_IN1_PORT);
+    Clock::enableGpioClock(BoardPins::FR_IN2_PORT);
+    Clock::enableGpioClock(BoardPins::RR_IN1_PORT);
+    Clock::enableGpioClock(BoardPins::RR_IN2_PORT);
+
+    Clock::enableGpioClock(BoardPins::PWM_CH1_PORT);
+    Clock::enableGpioClock(BoardPins::PWM_CH2_PORT);
+    Clock::enableGpioClock(BoardPins::PWM_CH3_PORT);
+    Clock::enableGpioClock(BoardPins::PWM_CH4_PORT);
+
+    Gpio::configureOutput(BoardPins::STBY_PORT, BoardPins::STBY_PIN);
+
+    Gpio::configureOutput(BoardPins::FL_IN1_PORT, BoardPins::FL_IN1_PIN);
+    Gpio::configureOutput(BoardPins::FL_IN2_PORT, BoardPins::FL_IN2_PIN);
+    Gpio::configureOutput(BoardPins::RL_IN1_PORT, BoardPins::RL_IN1_PIN);
+    Gpio::configureOutput(BoardPins::RL_IN2_PORT, BoardPins::RL_IN2_PIN);
+
+    Gpio::configureOutput(BoardPins::FR_IN1_PORT, BoardPins::FR_IN1_PIN);
+    Gpio::configureOutput(BoardPins::FR_IN2_PORT, BoardPins::FR_IN2_PIN);
+    Gpio::configureOutput(BoardPins::RR_IN1_PORT, BoardPins::RR_IN1_PIN);
+    Gpio::configureOutput(BoardPins::RR_IN2_PORT, BoardPins::RR_IN2_PIN);
+
+    stop();
+    disable();
+
+    initPwmTim3_(20000);
+    setSpeedPercent(0);
+}
+
+void MotorDriver::enable()
+{
+    Gpio::setHigh(BoardPins::STBY_PORT, BoardPins::STBY_PIN);
+}
+
+void MotorDriver::disable()
+{
+    stop();
+    Gpio::setLow(BoardPins::STBY_PORT, BoardPins::STBY_PIN);
+}
+
+void MotorDriver::initPwmTim3_(uint32_t pwm_hz)
+{
+    RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;
+
+    Gpio::configureAltFunction(BoardPins::PWM_CH1_PORT, BoardPins::PWM_CH1_PIN, 1);
+    Gpio::configureAltFunction(BoardPins::PWM_CH2_PORT, BoardPins::PWM_CH2_PIN, 1);
+    Gpio::configureAltFunction(BoardPins::PWM_CH3_PORT, BoardPins::PWM_CH3_PIN, 1);
+    Gpio::configureAltFunction(BoardPins::PWM_CH4_PORT, BoardPins::PWM_CH4_PIN, 1);
+
+    TIM3->PSC = 48 - 1;
+
+    uint32_t arr = (1'000'000u / pwm_hz) - 1u;
+    if (arr > 0xFFFFu) arr = 0xFFFFu;
+    TIM3->ARR = static_cast<uint16_t>(arr);
+
+    TIM3->CCMR1 =
+        (6u << TIM_CCMR1_OC1M_Pos) | TIM_CCMR1_OC1PE |
+        (6u << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE;
+
+    TIM3->CCMR2 =
+        (6u << TIM_CCMR2_OC3M_Pos) | TIM_CCMR2_OC3PE |
+        (6u << TIM_CCMR2_OC4M_Pos) | TIM_CCMR2_OC4PE;
+
+    TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E;
+
+    TIM3->CCR1 = 0;
+    TIM3->CCR2 = 0;
+    TIM3->CCR3 = 0;
+    TIM3->CCR4 = 0;
+
+    TIM3->CR1 |= TIM_CR1_ARPE;
+    TIM3->EGR = TIM_EGR_UG;
+    TIM3->CR1 |= TIM_CR1_CEN;
+}
+
+void MotorDriver::setDutyAll_(uint16_t duty)
+{
+    if (duty > TIM3->ARR) duty = TIM3->ARR;
+    TIM3->CCR1 = duty;
+    TIM3->CCR2 = duty;
+    TIM3->CCR3 = duty;
+    TIM3->CCR4 = duty;
+}
+
+void MotorDriver::setSpeedPercent(uint8_t percent)
+{
+    if (percent > 100) percent = 100;
+
+    uint32_t arrp1 = static_cast<uint32_t>(TIM3->ARR) + 1u;
+    uint32_t duty = (arrp1 * percent) / 100u;
+    if (duty > 0) duty -= 1u;
+
+    setDutyAll_(static_cast<uint16_t>(duty));
+}
+
+void MotorDriver::stop()
+{
+    Gpio::setLow(BoardPins::FL_IN1_PORT, BoardPins::FL_IN1_PIN);
+    Gpio::setLow(BoardPins::FL_IN2_PORT, BoardPins::FL_IN2_PIN);
+
+    Gpio::setLow(BoardPins::RL_IN1_PORT, BoardPins::RL_IN1_PIN);
+    Gpio::setLow(BoardPins::RL_IN2_PORT, BoardPins::RL_IN2_PIN);
+
+    Gpio::setLow(BoardPins::FR_IN1_PORT, BoardPins::FR_IN1_PIN);
+    Gpio::setLow(BoardPins::FR_IN2_PORT, BoardPins::FR_IN2_PIN);
+
+    Gpio::setLow(BoardPins::RR_IN1_PORT, BoardPins::RR_IN2_PIN);
+    Gpio::setLow(BoardPins::RR_IN2_PORT, BoardPins::RR_IN2_PIN);
+}
+
+void MotorDriver::setLeftForward()
+{
+    Gpio::setHigh(BoardPins::FL_IN1_PORT, BoardPins::FL_IN1_PIN);
+    Gpio::setLow (BoardPins::FL_IN2_PORT, BoardPins::FL_IN2_PIN);
+
+    Gpio::setHigh(BoardPins::RL_IN1_PORT, BoardPins::RL_IN1_PIN);
+    Gpio::setLow (BoardPins::RL_IN2_PORT, BoardPins::RL_IN2_PIN);
+}
+
+void MotorDriver::setLeftBack()
+{
+    Gpio::setLow (BoardPins::FL_IN1_PORT, BoardPins::FL_IN1_PIN);
+    Gpio::setHigh(BoardPins::FL_IN2_PORT, BoardPins::FL_IN2_PIN);
+
+    Gpio::setLow (BoardPins::RL_IN1_PORT, BoardPins::RL_IN1_PIN);
+    Gpio::setHigh(BoardPins::RL_IN2_PORT, BoardPins::RL_IN2_PIN);
+}
+
+void MotorDriver::setRightForward()
+{
+    Gpio::setHigh(BoardPins::FR_IN1_PORT, BoardPins::FR_IN1_PIN);
+    Gpio::setLow (BoardPins::FR_IN2_PORT, BoardPins::FR_IN2_PIN);
+
+    Gpio::setHigh(BoardPins::RR_IN1_PORT, BoardPins::RR_IN1_PIN);
+    Gpio::setLow (BoardPins::RR_IN2_PORT, BoardPins::RR_IN2_PIN);
+}
+
+void MotorDriver::setRightBack()
+{
+    Gpio::setLow (BoardPins::FR_IN1_PORT, BoardPins::FR_IN1_PIN);
+    Gpio::setHigh(BoardPins::FR_IN2_PORT, BoardPins::FR_IN2_PIN);
+
+    Gpio::setLow (BoardPins::RR_IN1_PORT, BoardPins::RR_IN1_PIN);
+    Gpio::setHigh(BoardPins::RR_IN2_PORT, BoardPins::RR_IN2_PIN);
+}
+
+void MotorDriver::forward()
+{
+    setLeftForward();
+    setRightForward();
+}
+
+void MotorDriver::back()
+{
+    setLeftBack();
+    setRightBack();
+}
+
+void MotorDriver::spinRight()
+{
+    setLeftForward();
+    setRightBack();
+}
+
+void MotorDriver::spinLeft()
+{
+    setLeftBack();
+    setRightForward();
+}

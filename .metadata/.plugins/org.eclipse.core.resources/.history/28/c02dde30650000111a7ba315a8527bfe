@@ -1,0 +1,208 @@
+#include "sensors/UltrasonicDual.hpp"
+
+#include "hw/BoardPins.hpp"
+#include "hw/Clock.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/Timebase.hpp"
+
+UltrasonicDual* UltrasonicDual::self_ = nullptr;
+
+// -------------------- timing helpers --------------------
+void UltrasonicDual::tim2Init1MHz_()
+{
+    RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
+
+    TIM2->CR1 = 0;
+    // assuming 48MHz system clock -> prescaler 48-1 => 1MHz
+    TIM2->PSC = 48 - 1;
+    TIM2->ARR = 0xFFFFFFFFu;
+    TIM2->CNT = 0;
+    TIM2->CR1 |= TIM_CR1_CEN;
+}
+
+uint32_t UltrasonicDual::nowUs_()
+{
+    return TIM2->CNT;
+}
+
+uint32_t UltrasonicDual::usToMm_(uint32_t echo_high_us)
+{
+    // HC-SR04: mm ≈ (echo_us * 10) / 58
+    return (echo_high_us * 10u) / 58u;
+}
+
+// -------------------- EXTI config (PA0 + PC1) --------------------
+void UltrasonicDual::extiInitPa0Pc1_()
+{
+    RCC->APB2ENR |= RCC_APB2ENR_SYSCFGCOMPEN;
+
+    // EXTI0 <- PA0 (default)
+    // EXTI1 <- PC1
+    SYSCFG->EXTICR[0] &= ~(SYSCFG_EXTICR1_EXTI0 | SYSCFG_EXTICR1_EXTI1);
+    SYSCFG->EXTICR[0] |=  (SYSCFG_EXTICR1_EXTI1_PC);
+
+    EXTI->IMR  |= (1u << 0) | (1u << 1);   // unmask 0,1
+    EXTI->RTSR |= (1u << 0) | (1u << 1);   // rising
+    EXTI->FTSR |= (1u << 0) | (1u << 1);   // falling
+
+    EXTI->PR = (1u << 0) | (1u << 1);      // clear pending
+
+    NVIC_EnableIRQ(EXTI0_1_IRQn);
+}
+
+// -------------------- Public static IRQ entry points --------------------
+void UltrasonicDual::irqFront()
+{
+    if (self_) self_->onEchoEdge(Which::Front);
+}
+
+void UltrasonicDual::irqRear()
+{
+    if (self_) self_->onEchoEdge(Which::Rear);
+}
+
+// -------------------- EXTI ISR --------------------
+extern "C" void EXTI0_1_IRQHandler(void)
+{
+    const uint32_t pr = EXTI->PR;
+
+    if (pr & (1u << 0))
+    {
+        EXTI->PR = (1u << 0);
+        UltrasonicDual::irqFront();
+    }
+
+    if (pr & (1u << 1))
+    {
+        EXTI->PR = (1u << 1);
+        UltrasonicDual::irqRear();
+    }
+}
+
+// -------------------- class impl --------------------
+void UltrasonicDual::init()
+{
+    // Bind channels to BoardPins
+    front_.trigPort = BoardPins::US_TRIG_PORT;
+    front_.trigPin  = BoardPins::US_TRIG_PIN;
+    front_.echoPort = BoardPins::US_ECHO_PORT;
+    front_.echoPin  = BoardPins::US_ECHO_PIN;
+
+    rear_.trigPort  = BoardPins::US_REAR_TRIG_PORT;
+    rear_.trigPin   = BoardPins::US_REAR_TRIG_PIN;
+    rear_.echoPort  = BoardPins::US_REAR_ECHO_PORT;
+    rear_.echoPin   = BoardPins::US_REAR_ECHO_PIN;
+
+    // GPIO init
+    Clock::enableGpioClock(front_.trigPort);
+    Clock::enableGpioClock(front_.echoPort);
+    Clock::enableGpioClock(rear_.trigPort);
+    Clock::enableGpioClock(rear_.echoPort);
+
+    Gpio::configureOutput(front_.trigPort, front_.trigPin);
+    Gpio::configureInput (front_.echoPort, front_.echoPin);
+    Gpio::setLow(front_.trigPort, front_.trigPin);
+
+    Gpio::configureOutput(rear_.trigPort, rear_.trigPin);
+    Gpio::configureInput (rear_.echoPort, rear_.echoPin);
+    Gpio::setLow(rear_.trigPort, rear_.trigPin);
+
+    Timebase::delayUs(10);
+
+    // Timer timestamps
+    tim2Init1MHz_();
+
+    // EXTI for echo pins
+    self_ = this;
+    extiInitPa0Pc1_();
+}
+
+bool UltrasonicDual::isBusy(Which w) const
+{
+    const Chan& c = (w == Which::Front) ? front_ : rear_;
+    return (c.state == State::WaitRise || c.state == State::WaitFall);
+}
+
+void UltrasonicDual::start(Which w, uint32_t timeout_us)
+{
+    Chan& c = (w == Which::Front) ? front_ : rear_;
+    startImpl_(c, timeout_us);
+}
+
+void UltrasonicDual::startImpl_(Chan& c, uint32_t timeout_us)
+{
+    // Arm state
+    c.state = State::WaitRise;
+    c.start_us = nowUs_();
+    c.timeout_us = timeout_us;
+    c.dist_mm = 0;
+
+    // Trigger pulse (10us)
+    Gpio::setHigh(c.trigPort, c.trigPin);
+    Timebase::delayUs(10);
+    Gpio::setLow(c.trigPort, c.trigPin);
+}
+
+void UltrasonicDual::tick()
+{
+    const uint32_t t = nowUs_();
+
+    auto check = [&](Chan& c)
+    {
+        if (c.state == State::WaitRise || c.state == State::WaitFall)
+        {
+            if ((uint32_t)(t - c.start_us) >= c.timeout_us)
+            {
+                c.state = State::DoneTimeout;
+                c.dist_mm = 0;
+            }
+        }
+    };
+
+    check(front_);
+    check(rear_);
+}
+
+UltrasonicDual::Result UltrasonicDual::fetchResult(Which w, uint32_t& distance_mm)
+{
+    Chan& c = (w == Which::Front) ? front_ : rear_;
+
+    if (c.state == State::DoneOk)
+    {
+        distance_mm = c.dist_mm;
+        c.state = State::Idle;
+        return Result::Ok;
+    }
+    if (c.state == State::DoneTimeout)
+    {
+        c.state = State::Idle;
+        return Result::Timeout;
+    }
+    return Result::None;
+}
+
+void UltrasonicDual::onEchoEdge(Which w)
+{
+    Chan& c = (w == Which::Front) ? front_ : rear_;
+    const uint32_t t = nowUs_();
+    const bool level = Gpio::read(c.echoPort, c.echoPin);
+
+    if (c.state == State::WaitRise)
+    {
+        if (level)
+        {
+            c.t_rise = t;
+            c.state = State::WaitFall;
+        }
+    }
+    else if (c.state == State::WaitFall)
+    {
+        if (!level)
+        {
+            c.t_fall = t;
+            const uint32_t echo_high_us = (uint32_t)(c.t_fall - c.t_rise);
+            c.dist_mm = usToMm_(echo_high_us);
+            c.state = State::DoneOk;
+        }
+    }
+}

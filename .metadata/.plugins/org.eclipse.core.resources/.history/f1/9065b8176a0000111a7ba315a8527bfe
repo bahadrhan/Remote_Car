@@ -1,0 +1,73 @@
+#include "stm32f0xx.h"
+
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/BoardPins.hpp"
+
+#include "app/Lights.hpp"
+#include "sensors/UltrasonicSensor.hpp"
+
+static inline bool decideOnWithHysteresis(bool currentOn, uint32_t dist_mm,
+                                         uint32_t on_mm, uint32_t off_mm)
+{
+    if (!currentOn)
+        return (dist_mm > 0 && dist_mm <= on_mm);
+    else
+        return !(dist_mm >= off_mm);
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    Lights lights;
+    lights.init();
+    lights.enable();
+    lights.allOff();
+
+    UltrasonicSensor front(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN,
+                           BoardPins::US_ECHO_PORT, BoardPins::US_ECHO_PIN);
+
+    UltrasonicSensor rear(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN,
+                          BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN);
+
+    front.init();
+    rear.init();
+
+    const uint32_t front_on_mm  = 250;
+    const uint32_t front_off_mm = 330;
+
+    const uint32_t rear_on_mm   = 250;
+    const uint32_t rear_off_mm  = 330;
+
+    bool headOn = false;
+    bool stopOn = false;
+
+    while (1)
+    {
+        uint32_t dFront = 0;
+        bool okFront = front.measureOnce(dFront);
+
+        if (okFront)
+            headOn = decideOnWithHysteresis(headOn, dFront, front_on_mm, front_off_mm);
+        else
+            headOn = false;
+
+        lights.setHeadlight(headOn);
+
+        Timebase::delayMs(80);
+
+        uint32_t dRear = 0;
+        bool okRear = rear.measureOnce(dRear);
+
+        if (okRear)
+            stopOn = decideOnWithHysteresis(stopOn, dRear, rear_on_mm, rear_off_mm);
+        else
+            stopOn = false;
+
+        lights.setStoplight(stopOn);
+
+        Timebase::delayMs(80);
+    }
+}

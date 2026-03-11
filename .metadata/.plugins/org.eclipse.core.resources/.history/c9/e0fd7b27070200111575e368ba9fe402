@@ -1,0 +1,62 @@
+#include "stm32f0xx.h"
+
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/BoardPins.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/Uart.hpp"
+
+static void setHeadlight(bool on)
+{
+    if (on) Gpio::setHigh(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+    else    Gpio::setLow (BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+
+    Uart::write(on ? "HL=1\n" : "HL=0\n");
+}
+
+static void setStoplight(bool on)
+{
+    if (on) Gpio::setHigh(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+    else    Gpio::setLow (BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+
+    Uart::write(on ? "SL=1\n" : "SL=0\n");
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    // Headlight GPIO
+    Clock::enableGpioClock(BoardPins::HEADLIGHT_PORT);
+    Gpio::configureOutput(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+    Gpio::setLow(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN); // OFF
+
+    // Stoplight GPIO
+    Clock::enableGpioClock(BoardPins::STOPLIGHT_PORT);
+    Gpio::configureOutput(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+    Gpio::setLow(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN); // OFF
+
+    // UART
+    Uart::init(115200);
+    Uart::write("BOOT\n");
+
+    // Explicit startup state
+    setHeadlight(false);
+    setStoplight(false);
+
+    while (1)
+    {
+        uint8_t b = 0;
+        if (Uart::readByte(b))
+        {
+            if      (b == 'H') setHeadlight(true);
+            else if (b == 'h') setHeadlight(false);
+            else if (b == 'S') setStoplight(true);
+            else if (b == 's') setStoplight(false);
+            else               Uart::write("RX=?\n");
+        }
+
+        Timebase::delayMs(2);
+    }
+}

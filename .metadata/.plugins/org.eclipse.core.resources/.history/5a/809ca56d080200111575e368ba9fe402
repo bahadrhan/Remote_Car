@@ -1,0 +1,86 @@
+#include "stm32f0xx.h"
+
+#include <cstdint>
+#include <cstdio>
+
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/BoardPins.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/Uart.hpp"
+
+#include "app/MotorDriver.hpp"
+#include "app/Lights.hpp"
+
+static MotorDriver motor;
+static Lights lights;
+
+static uint8_t speedPct = 40;
+
+static void setSpeed(uint8_t pct)
+{
+    if (pct > 100) pct = 100;
+    speedPct = pct;
+    motor.setSpeedPercent(speedPct);
+
+    char buf[24];
+    std::snprintf(buf, sizeof(buf), "SPD=%u\n", (unsigned)speedPct);
+    Uart::write(buf);
+}
+
+static void stopAll()
+{
+    motor.stop();
+    Uart::write("M=STOP\n");
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    // UART
+    Uart::init(115200);
+    Uart::write("BOOT\n");
+
+    // Init hardware
+    motor.init();
+    motor.enable();
+    lights.init();
+
+    // Safe defaults
+    lights.setHeadlight(false);
+    lights.setStoplight(false);
+    setSpeed(40);
+    stopAll();
+
+    while (1)
+    {
+        uint8_t b = 0;
+        if (Uart::readByte(b))
+        {
+            // ---- Lights ----
+            if      (b == 'H') { lights.setHeadlight(true);  Uart::write("HL=1\n"); }
+            else if (b == 'h') { lights.setHeadlight(false); Uart::write("HL=0\n"); }
+            else if (b == 'S') { lights.setStoplight(true);  Uart::write("SL=1\n"); }
+            else if (b == 's') { lights.setStoplight(false); Uart::write("SL=0\n"); }
+
+            // ---- Speed: '0'..'9' => 0..90% ----
+            else if (b >= '0' && b <= '9')
+            {
+                setSpeed((uint8_t)(b - '0') * 10);
+            }
+
+            // ---- Motors ----
+            else if (b == 'F') { motor.forward();   Uart::write("M=F\n"); }
+            else if (b == 'B') { motor.back();      Uart::write("M=B\n"); }
+            else if (b == 'L') { motor.spinLeft();  Uart::write("M=L\n"); }
+            else if (b == 'R') { motor.spinRight(); Uart::write("M=R\n"); }
+            else if (b == 'X') { stopAll(); }
+
+            else { Uart::write("RX=?\n"); }
+        }
+
+        Timebase::delayMs(2);
+    }
+}

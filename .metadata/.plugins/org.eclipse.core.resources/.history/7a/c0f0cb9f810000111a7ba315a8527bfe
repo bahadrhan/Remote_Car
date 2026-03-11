@@ -1,0 +1,113 @@
+#include "stm32f0xx.h"
+
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/BoardPins.hpp"
+#include "hw/Gpio.hpp"
+
+#include "app/Parameters.hpp"
+#include "app/Command.hpp"
+#include "app/CommandExecutor.hpp"
+#include "app/AutonomyController.hpp"
+#include "app/ControlManager.hpp"
+
+#include "app/MotorDriver.hpp"
+#include "app/Lights.hpp"
+
+#include "sensors/UltrasonicSensor.hpp"
+
+static bool buttonDown()
+{
+    // PC13 active-low
+    return !Gpio::read(BoardPins::BTN_PORT, BoardPins::BTN_PIN);
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    // Button
+    Clock::enableGpioClock(BoardPins::BTN_PORT);
+    Gpio::configureInput(BoardPins::BTN_PORT, BoardPins::BTN_PIN, Gpio::Pull::None);
+
+    // Motor + lights
+    MotorDriver motor;
+    motor.init();
+    motor.enable();
+
+    Lights lights;
+    lights.init();
+
+    // Sensors
+    UltrasonicSensor front(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN,
+                           BoardPins::US_ECHO_PORT, BoardPins::US_ECHO_PIN);
+
+    UltrasonicSensor rear(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN,
+                          BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN);
+
+    front.init();
+    rear.init();
+
+    // Parameters
+    Parameters params;
+    params.defaultSpeedPercent = 60;
+    params.commandTimeoutMs    = 1500; // after 1.5s no button activity -> autonomy
+    params.autoModeEnabled     = true;
+    params.sensorsEnabled      = true;
+    params.lightsEnabled       = true;
+
+    // Control system
+    AutonomyController autoCtrl;
+    autoCtrl.init(params, front, rear);
+
+    CommandExecutor exec;
+    exec.init(motor, lights, params);
+
+    ControlManager ctrl;
+    ctrl.init(params, exec, autoCtrl);
+
+    // Boot behavior: STOP first
+    ctrl.onCommand({CommandType::Stop, 0}, Timebase::millis());
+
+    uint32_t lastHumanTouchMs = Timebase::millis();
+    bool lastBtn = false;
+
+    while (1)
+    {
+        const uint32_t now = Timebase::millis();
+        const bool btn = buttonDown();
+
+        // Any press counts as "human touched"
+        if (btn && !lastBtn)
+        {
+            lastHumanTouchMs = now;
+            autoCtrl.reset();     // clean autonomy reset when leaving autonomy
+        }
+
+        // Normal mode = if you touched recently
+        const bool normalMode = (now - lastHumanTouchMs) < params.commandTimeoutMs;
+
+        if (normalMode)
+        {
+            // Button controls the car directly
+            if (btn)
+                ctrl.onCommand({CommandType::Forward, 0}, now);
+            else
+                ctrl.onCommand({CommandType::Stop, 0}, now);
+        }
+        else
+        {
+            // No human activity for a while -> autonomy takes over
+            // (we do NOT send Stop anymore; ctrl.update will run autonomy)
+        }
+
+        // Brain update:
+        // - if recent commands came (normal mode), it applies them
+        // - otherwise it runs autonomy
+        ctrl.update(now);
+
+        lastBtn = btn;
+        Timebase::delayMs(10);
+    }
+}

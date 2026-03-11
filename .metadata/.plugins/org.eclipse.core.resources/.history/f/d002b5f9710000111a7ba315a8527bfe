@@ -1,0 +1,96 @@
+#include "stm32f0xx.h"
+
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/BoardPins.hpp"
+#include "hw/Gpio.hpp"
+
+static bool waitEchoLevel(GPIO_TypeDef* port, uint16_t pin, bool high, uint32_t timeout_us)
+{
+    for (uint32_t i = 0; i < timeout_us; ++i)
+    {
+        if (Gpio::read(port, pin) == high)
+            return true;
+        Timebase::delayUs(1);
+    }
+    return false;
+}
+
+static uint32_t measureEchoHighUs(GPIO_TypeDef* port, uint16_t pin, uint32_t timeout_us)
+{
+    if (!waitEchoLevel(port, pin, true, timeout_us))
+        return 0;
+
+    uint32_t w = 0;
+    while (w < timeout_us)
+    {
+        if (!Gpio::read(port, pin))
+            break;
+        ++w;
+        Timebase::delayUs(1);
+    }
+    return w;
+}
+
+static uint32_t usToMm(uint32_t echo_us)
+{
+    return (echo_us * 10u) / 58u;
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    // Lights
+    Clock::enableGpioClock(BoardPins::STOPLIGHT_PORT);
+    Clock::enableGpioClock(BoardPins::HEADLIGHT_PORT);
+    Gpio::configureOutput(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+    Gpio::configureOutput(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+
+    Gpio::setLow(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+    Gpio::setLow(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+
+    // Rear sensor pins
+    Clock::enableGpioClock(BoardPins::US_REAR_TRIG_PORT);
+    Clock::enableGpioClock(BoardPins::US_REAR_ECHO_PORT);
+
+    Gpio::configureOutput(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+    Gpio::configureInput (BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN);
+
+    Gpio::setLow(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+
+    Timebase::delayMs(200);
+
+    const uint32_t threshold_mm = 400;   // make it BIG first, easier to test
+
+    while (1)
+    {
+        // Trigger
+        Gpio::setHigh(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+        Timebase::delayUs(10);
+        Gpio::setLow(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+
+        uint32_t echo_us = measureEchoHighUs(BoardPins::US_REAR_ECHO_PORT,
+                                             BoardPins::US_REAR_ECHO_PIN,
+                                             30000);
+
+        // Blink headlight if measurement succeeded (debug proof)
+        if (echo_us != 0)
+        {
+            Gpio::setHigh(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+            Timebase::delayMs(30);
+            Gpio::setLow(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+        }
+
+        uint32_t dist_mm = (echo_us == 0) ? 0 : usToMm(echo_us);
+
+        // Stoplight logic
+        if (echo_us != 0 && dist_mm > 0 && dist_mm <= threshold_mm)
+            Gpio::setHigh(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+        else
+            Gpio::setLow(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+
+        Timebase::delayMs(150);
+    }
+}

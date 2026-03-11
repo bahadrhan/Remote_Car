@@ -1,0 +1,104 @@
+#include "stm32f0xx.h"
+
+#include "hw/BoardPins.hpp"
+#include "hw/Clock.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/Timebase.hpp"
+
+#include "app/MotorDriver.hpp"
+#include "sensors/UltrasonicSensor.hpp"
+
+enum class Dir : uint8_t
+{
+    Forward = 0,
+    Back
+};
+
+static inline void headOn()  { Gpio::setHigh(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN); }
+static inline void headOff() { Gpio::setLow (BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN); }
+
+static inline void stopOn()  { Gpio::setHigh(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN); }
+static inline void stopOff() { Gpio::setLow (BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN); }
+
+static inline bool obstacleClose(UltrasonicSensor& s, uint32_t threshold_mm)
+{
+    uint32_t d = 0;
+    if (!s.measureOnce(d)) return false;
+    return (d > 0 && d <= threshold_mm);
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    Clock::enableGpioClock(BoardPins::HEADLIGHT_PORT);
+    Clock::enableGpioClock(BoardPins::STOPLIGHT_PORT);
+    Gpio::configureOutput(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+    Gpio::configureOutput(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+    headOff();
+    stopOff();
+
+    UltrasonicSensor front(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN,
+                           BoardPins::US_ECHO_PORT, BoardPins::US_ECHO_PIN);
+
+    UltrasonicSensor rear(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN,
+                          BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN);
+
+    front.init();
+    rear.init();
+
+    MotorDriver motor;
+    motor.init();
+    motor.enable();
+    motor.setSpeedPercent(80);
+
+    const uint32_t threshold_mm = 220;
+
+    Dir dir = Dir::Forward;
+
+    auto setDir = [&](Dir d)
+    {
+        dir = d;
+        stopOff();
+
+        if (dir == Dir::Forward)
+        {
+            headOn();
+            motor.forward();
+        }
+        else
+        {
+            headOff();
+            motor.back();
+        }
+    };
+
+    auto stopAndWait = [&]()
+    {
+        motor.stop();
+        stopOn();
+        Timebase::delayMs(3000);
+        stopOff();
+    };
+
+    setDir(Dir::Forward);
+
+    while (1)
+    {
+        bool hit = false;
+
+        if (dir == Dir::Forward)
+            hit = obstacleClose(front, threshold_mm);
+        else
+            hit = obstacleClose(rear, threshold_mm);
+
+        if (hit)
+        {
+            stopAndWait();
+            setDir(dir == Dir::Forward ? Dir::Back : Dir::Forward);
+        }
+
+        Timebase::delayMs(80);
+    }
+}

@@ -1,0 +1,170 @@
+/*
+ * CommandExecutor.cpp
+ *
+ *  Created on: Feb 2, 2026
+ *      Author: bahad
+ */
+
+#include "app/CommandExecutor.hpp"
+
+#include "app/MotorDriver.hpp"
+#include "app/Lights.hpp"
+
+static inline uint8_t clamp0_100(uint8_t v)
+{
+    return (v > 100) ? 100 : v;
+}
+
+void CommandExecutor::init(MotorDriver& motor, Lights& lights, Parameters& params)
+{
+    motor_  = &motor;
+    lights_ = &lights;
+    params_ = &params;
+
+    motor_->setSpeedPercent(clamp0_100(params_->defaultSpeedPercent));
+    stop();
+}
+
+bool CommandExecutor::apply(const Command& cmd)
+{
+    if (!motor_ || !lights_ || !params_)
+        return false;
+
+    switch (cmd.type)
+    {
+        case CommandType::Forward:
+        case CommandType::Backward:
+        case CommandType::TurnLeft:
+        case CommandType::TurnRight:
+        case CommandType::Stop:
+            applyMotion_(cmd.type);
+            break;
+
+        case CommandType::SetSpeed:
+            applySpeed_(cmd.value);
+            break;
+
+        case CommandType::EnableLights:
+        case CommandType::EnableSensors:
+        case CommandType::EnableAutoMode:
+            applyFeatureToggle_(cmd.type, cmd.value);
+            break;
+
+        case CommandType::None:
+        default:
+            break;
+    }
+
+    updateLights_();
+    return moving_;
+}
+
+void CommandExecutor::stop()
+{
+    if (!motor_ || !lights_ || !params_)
+        return;
+
+    motor_->stop();
+    moving_ = false;
+    updateLights_();
+}
+
+void CommandExecutor::applyMotion_(CommandType t)
+{
+    if (!motor_ || !params_)
+        return;
+
+
+    motor_->setSpeedPercent(clamp0_100(params_->defaultSpeedPercent));
+
+    switch (t)
+    {
+        case CommandType::Forward:
+            motor_->forward();
+            moving_ = true;
+            break;
+
+        case CommandType::Backward:
+            motor_->back();
+            moving_ = true;
+            break;
+
+        case CommandType::TurnLeft:
+            motor_->spinLeft();
+            moving_ = true;
+            break;
+
+        case CommandType::TurnRight:
+            motor_->spinRight();
+            moving_ = true;
+            break;
+
+        case CommandType::Stop:
+        default:
+            motor_->stop();
+            moving_ = false;
+            break;
+    }
+}
+
+void CommandExecutor::applySpeed_(uint8_t percent)
+{
+    if (!motor_ || !params_)
+        return;
+
+    params_->defaultSpeedPercent = clamp0_100(percent);
+    motor_->setSpeedPercent(params_->defaultSpeedPercent);
+}
+
+void CommandExecutor::applyFeatureToggle_(CommandType t, uint8_t value)
+{
+    if (!params_)
+        return;
+
+    const bool en = (value != 0);
+
+    switch (t)
+    {
+        case CommandType::EnableLights:
+            params_->lightsEnabled = en;
+            break;
+
+        case CommandType::EnableSensors:
+            params_->sensorsEnabled = en;
+            break;
+
+        case CommandType::EnableAutoMode:
+            params_->autoModeEnabled = en;
+            break;
+
+        default:
+            break;
+    }
+}
+
+void CommandExecutor::updateLights_()
+{
+    if (!lights_ || !params_)
+        return;
+
+    if (!params_->lightsEnabled)
+    {
+
+        LightsConfig cfg;
+        cfg.headlight = LightMode::ForceOff;
+        cfg.stoplight = LightMode::ForceOff;
+        lights_->setConfig(cfg);
+        lights_->apply(false);
+        return;
+    }
+
+
+    LightsConfig cfg;
+    cfg.headlight = LightMode::Auto;
+    cfg.stoplight = LightMode::Auto;
+    lights_->setConfig(cfg);
+    lights_->apply(moving_);
+}
+
+
+

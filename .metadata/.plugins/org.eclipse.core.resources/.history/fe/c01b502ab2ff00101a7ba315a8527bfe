@@ -1,0 +1,83 @@
+#include "stm32f0xx.h"
+
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/BoardPins.hpp"
+
+static constexpr uint32_t TRIG_PERIOD_MS = 80; // safe for HC-SR04
+
+static inline void initPins()
+{
+    // LEDs
+    Clock::enableGpioClock(BoardPins::HEADLIGHT_PORT);
+    Clock::enableGpioClock(BoardPins::STOPLIGHT_PORT);
+    Gpio::configureOutput(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+    Gpio::configureOutput(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+    Gpio::setLow(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+    Gpio::setLow(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+
+    // Front ultrasonic pins
+    Clock::enableGpioClock(BoardPins::US_TRIG_PORT);
+    Clock::enableGpioClock(BoardPins::US_ECHO_PORT);
+    Gpio::configureOutput(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN);
+    Gpio::configureInput (BoardPins::US_ECHO_PORT, BoardPins::US_ECHO_PIN);
+    Gpio::setLow(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN);
+
+    // Rear ultrasonic pins
+    Clock::enableGpioClock(BoardPins::US_REAR_TRIG_PORT);
+    Clock::enableGpioClock(BoardPins::US_REAR_ECHO_PORT);
+    Gpio::configureOutput(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+    Gpio::configureInput (BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN);
+    Gpio::setLow(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+}
+
+static inline void trig10us(GPIO_TypeDef* port, uint16_t pinMask)
+{
+    Gpio::setHigh(port, pinMask);
+    Timebase::delayUs(10);
+    Gpio::setLow(port, pinMask);
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+    initPins();
+
+    uint32_t lastTrigMs = 0;
+
+    for (;;)
+    {
+        const uint32_t now = Timebase::millis();
+
+        // trigger both sensors periodically
+        if (now - lastTrigMs >= TRIG_PERIOD_MS)
+        {
+            lastTrigMs = now;
+
+            // ensure low a moment before triggering
+            Gpio::setLow(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN);
+            Gpio::setLow(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+            Timebase::delayUs(2);
+
+            trig10us(BoardPins::US_TRIG_PORT,      BoardPins::US_TRIG_PIN);
+            trig10us(BoardPins::US_REAR_TRIG_PORT, BoardPins::US_REAR_TRIG_PIN);
+        }
+
+        // read raw echo levels
+        const bool frontEcho = Gpio::read(BoardPins::US_ECHO_PORT, BoardPins::US_ECHO_PIN);
+        const bool rearEcho  = Gpio::read(BoardPins::US_REAR_ECHO_PORT, BoardPins::US_REAR_ECHO_PIN);
+
+        // LED logic you asked:
+        // front -> headlights
+        // rear  -> stoplight
+        // both  -> both on
+        // none  -> both off
+        if (frontEcho) Gpio::setHigh(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+        else           Gpio::setLow (BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+
+        if (rearEcho)  Gpio::setHigh(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+        else           Gpio::setLow (BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+    }
+}

@@ -1,0 +1,98 @@
+#include "app/Lights.hpp"
+
+#include "hw/BoardPins.hpp"
+#include "hw/Clock.hpp"
+#include "hw/Gpio.hpp"
+
+void Lights::init()
+{
+    Clock::enableGpioClock(BoardPins::HEADLIGHT_PORT);
+    Clock::enableGpioClock(BoardPins::STOPLIGHT_PORT);
+
+    Gpio::configureOutput(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+    Gpio::configureOutput(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+
+    enabled_ = true;
+    allOff();
+}
+
+void Lights::enable()
+{
+    enabled_ = true;
+}
+
+void Lights::disable()
+{
+    enabled_ = false;
+    allOff();
+}
+
+bool Lights::isEnabled() const
+{
+    return enabled_;
+}
+
+void Lights::setConfig(const LightsConfig& cfg)
+{
+    cfg_ = cfg;
+}
+
+void Lights::apply(bool moving)
+{
+    if (!enabled_)
+    {
+        allOff();
+        return;
+    }
+
+    const bool autoHeadlight = moving;
+    const bool autoStoplight = !moving;
+
+    applyOne_(cfg_.headlight, autoHeadlight, true);
+    applyOne_(cfg_.stoplight, autoStoplight, false);
+}
+
+void Lights::setHeadlight(bool on)
+{
+    if (!enabled_) return;
+    write_(true, on);
+}
+
+void Lights::setStoplight(bool on)
+{
+    if (!enabled_) return;
+    write_(false, on);
+}
+
+void Lights::allOff()
+{
+    write_(true, false);
+    write_(false, false);
+}
+
+void Lights::applyOne_(LightMode mode, bool autoValue, bool isHeadlight)
+{
+    bool on = false;
+
+    switch (mode)
+    {
+        case LightMode::Auto:     on = autoValue; break;
+        case LightMode::ForceOn:  on = true;      break;
+        case LightMode::ForceOff: on = false;     break;
+        default:                  on = false;     break;
+    }
+
+    write_(isHeadlight, on);
+}
+
+void Lights::write_(bool isHeadlight, bool on)
+{
+    GPIO_TypeDef* port = isHeadlight ? BoardPins::HEADLIGHT_PORT : BoardPins::STOPLIGHT_PORT;
+    uint16_t pin       = isHeadlight ? BoardPins::HEADLIGHT_PIN  : BoardPins::STOPLIGHT_PIN;
+
+    if (on) Gpio::setHigh(port, pin);
+    else    Gpio::setLow(port, pin);
+}
+
+
+

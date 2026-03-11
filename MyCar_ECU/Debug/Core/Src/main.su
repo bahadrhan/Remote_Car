@@ -1,0 +1,10 @@
+../Core/Src/main.cpp:41:13:void setSpeed(uint8_t)	48	static
+../Core/Src/main.cpp:52:13:void stopAll()	8	static
+../Core/Src/main.cpp:58:13:void sendDistances()	104	static
+../Core/Src/main.cpp:87:13:void autopilotStop_()	8	static
+../Core/Src/main.cpp:100:13:void autopilotStart_()	8	static
+../Core/Src/main.cpp:115:13:void applyCommandToMotor_(const Command&)	16	static
+../Core/Src/main.cpp:147:13:void handleByte(uint8_t)	24	static
+../Core/Src/main.cpp:231:5:int main()	16	static
+../Core/Src/main.cpp:315:1:void __static_initialization_and_destruction_0(int, int)	24	static
+../Core/Src/main.cpp:315:1:cpp)	8	static

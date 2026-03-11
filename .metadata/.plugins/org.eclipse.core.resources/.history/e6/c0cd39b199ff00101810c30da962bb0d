@@ -1,0 +1,75 @@
+#include "hw/Uart.hpp"
+#include "stm32f0xx.h"
+
+namespace
+{
+    static uint32_t pclk1_hz_()
+    {
+        uint32_t hclk = SystemCoreClock;
+
+        // AHB prescaler
+        const uint32_t hpre = (RCC->CFGR >> RCC_CFGR_HPRE_Pos) & 0xFu;
+        static const uint16_t ahb_div[16] =
+        { 1,1,1,1,1,1,1,1, 2,4,8,16,64,128,256,512 };
+        hclk /= ahb_div[hpre];
+
+        // APB1 prescaler
+        const uint32_t ppre = (RCC->CFGR >> RCC_CFGR_PPRE_Pos) & 0x7u;
+        if (ppre < 4) return hclk;
+
+        static const uint8_t apb_div[4] = {2,4,8,16};
+        return hclk / apb_div[ppre - 4];
+    }
+}
+
+namespace Uart
+{
+    void init(uint32_t baud)
+    {
+        RCC->AHBENR  |= RCC_AHBENR_GPIOAEN;
+        RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
+
+        // PA2/PA3 -> AF
+        GPIOA->MODER &= ~((3u << (2u*2u)) | (3u << (3u*2u)));
+        GPIOA->MODER |=  ((2u << (2u*2u)) | (2u << (3u*2u)));
+
+        // AF1 for USART2
+        GPIOA->AFR[0] &= ~((0xFu << (2u*4u)) | (0xFu << (3u*4u)));
+        GPIOA->AFR[0] |=  ((0x1u << (2u*4u)) | (0x1u << (3u*4u)));
+
+        // RX pull-up (optional)
+        GPIOA->PUPDR &= ~(3u << (3u*2u));
+        GPIOA->PUPDR |=  (1u << (3u*2u));
+
+        USART2->CR1 = 0;
+        USART2->CR2 = 0;
+        USART2->CR3 = 0;
+
+        const uint32_t pclk = pclk1_hz_();
+        USART2->BRR = (uint16_t)((pclk + (baud/2u)) / baud);
+
+        USART2->CR1 |= USART_CR1_TE | USART_CR1_RE;
+        USART2->CR1 |= USART_CR1_UE;
+    }
+
+    void writeByte(uint8_t b)
+    {
+        while (!(USART2->ISR & USART_ISR_TXE)) {}
+        USART2->TDR = b;
+    }
+
+    void write(const char* s)
+    {
+        while (*s) writeByte((uint8_t)*s++);
+    }
+
+    bool readByte(uint8_t& out)
+    {
+        if (USART2->ISR & USART_ISR_RXNE)
+        {
+            out = (uint8_t)(USART2->RDR & 0xFFu);
+            return true;
+        }
+        return false;
+    }
+}

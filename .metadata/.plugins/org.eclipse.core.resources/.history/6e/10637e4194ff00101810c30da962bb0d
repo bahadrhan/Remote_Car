@@ -1,0 +1,18 @@
+#include "stm32f0xx.h"
+#include "hw/Timebase.hpp"
+#include "hw/Uart.hpp"
+
+int main(void)
+{
+    SystemInit();
+    SystemCoreClockUpdate();
+
+    Timebase::init();
+    Uart::init(115200);
+
+    while (1)
+    {
+        Uart::writeByte('P');
+        Timebase::delayMs(500);
+    }
+}

@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SmartCar Control</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#111; color:#eee; text-align:center; margin:0; padding:20px; }
+    h1 { margin: 10px 0 20px; }
+
+    .card { display:inline-block; background:#1b1b1b; border:1px solid #333; border-radius:12px; padding:16px; margin:10px; min-width:360px; vertical-align: top; }
+    .row { margin: 10px 0; }
+
+    button {
+      width:150px; height:56px; font-size:18px; margin:6px;
+      border-radius:10px; border:1px solid #444; background:#222; color:#eee; cursor:pointer;
+      user-select:none; -webkit-user-select:none; touch-action:none;
+    }
+    button:active { transform: scale(0.98); }
+    .danger { background:#3a1212; border-color:#7a2a2a; }
+    .ok { background:#123a12; border-color:#2a7a2a; }
+    .hint { color:#aaa; font-size:13px; margin-top:8px; line-height:1.4; }
+
+    .kbd {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      border:1px solid #444; border-bottom-color:#222; padding:2px 6px; border-radius:6px; background:#181818;
+    }
+
+    .toggle { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:8px; }
+    .toggle input { transform: scale(1.3); }
+
+    .slider-wrap { padding: 10px 12px; }
+    input[type="range"] { width: 92%; }
+    .speed-readout { font-size: 18px; margin-top: 6px; }
+
+    hr { border:0; border-top:1px solid #333; margin:14px 0; }
+
+    .sensor-grid { display:flex; justify-content:center; gap:14px; margin-top:10px; flex-wrap:wrap; }
+    .sensor-box { border:1px solid #333; border-radius:10px; padding:10px 12px; min-width:150px; background:#171717; }
+    .sensor-box .label { color:#aaa; font-size:13px; }
+    .sensor-box .val { font-size:22px; margin-top:4px; }
+    .status { color:#aaa; font-size:13px; margin-top:10px; }
+  </style>
+</head>
+
+<body>
+  <h1>🚗 SmartCar Control</h1>
+
+  <!-- DRIVE -->
+  <div class="card">
+    <h2>Drive (hold)</h2>
+
+    <div class="row">
+      <button class="hold" data-cmd="F">⬆️ Forward</button>
+    </div>
+
+    <div class="row">
+      <button class="hold" data-cmd="L">⬅️ Left</button>
+      <button id="stopBtn" class="tap danger" data-cmd="X">⏹ Stop</button>
+      <button class="hold" data-cmd="R">➡️ Right</button>
+    </div>
+
+    <div class="row">
+      <button class="hold" data-cmd="B">⬇️ Back</button>
+    </div>
+
+    <div class="hint">
+      Mouse/touch: hold buttons<br>
+      Keyboard: <span class="kbd">↑</span> <span class="kbd">↓</span> <span class="kbd">←</span> <span class="kbd">→</span> to drive,
+      <span class="kbd">Space</span> to stop
+    </div>
+  </div>
+
+  <!-- LIGHTS -->
+  <div class="card">
+    <h2>Lights (manual)</h2>
+
+    <div class="row">
+      <button class="tap ok" data-cmd="H">💡 Head ON</button>
+      <button class="tap" data-cmd="h">💡 Head OFF</button>
+    </div>
+
+    <div class="row">
+      <button class="tap ok" data-cmd="S">🟥 Stop ON</button>
+      <button class="tap" data-cmd="s">🟥 Stop OFF</button>
+    </div>
+
+    <hr>
+
+    <h2>Auto Lights</h2>
+    <div class="toggle">
+      <input id="autoLights" type="checkbox" />
+      <label for="autoLights">Enable auto lights</label>
+    </div>
+    <div class="hint">
+      Auto OFF: manual only<br>
+      Auto ON: moving → Head ON + Stop OFF, stopped → Head OFF + Stop ON
+    </div>
+  </div>
+
+  <!-- SPEED -->
+  <div class="card">
+    <h2>Speed</h2>
+    <div class="slider-wrap">
+      <input id="speed" type="range" min="0" max="90" step="10" value="40" />
+      <div class="speed-readout">
+        Speed: <span id="speedVal">40</span>%
+      </div>
+      <div class="hint">Sends command <span class="kbd">0..9</span> (0..90%)</div>
+    </div>
+  </div>
+
+  <!-- SENSORS -->
+  <div class="card">
+    <h2>Sensors</h2>
+
+    <div class="row">
+      <button id="readSensorsBtn" class="tap ok">📏 Read (g)</button>
+    </div>
+
+    <div class="toggle">
+      <input id="liveSensors" type="checkbox" />
+      <label for="liveSensors">Live sensors (E/e)</label>
+    </div>
+
+    <div class="sensor-grid">
+      <div class="sensor-box">
+        <div class="label">Front (mm)</div>
+        <div class="val" id="frontVal">—</div>
+      </div>
+      <div class="sensor-box">
+        <div class="label">Rear (mm)</div>
+        <div class="val" id="rearVal">—</div>
+      </div>
+    </div>
+
+    <div class="status" id="sensorStatus">Idle</div>
+
+    <div class="hint">
+      Read once sends <span class="kbd">g</span> and shows last received <span class="kbd">D F=.. R=..</span><br>
+      Live mode sends <span class="kbd">E</span> / <span class="kbd">e</span> and polls server for latest values
+    </div>
+  </div>
+
+  <!-- AUTOPILOT (ADDED) -->
+  <div class="card">
+    <h2>Autopilot</h2>
+
+    <div class="toggle">
+      <input id="autoPilotEnable" type="checkbox" />
+      <label for="autoPilotEnable">Enable autopilot (A/a)</label>
+    </div>
+
+    <div class="status" id="autoPilotStatus">Autopilot: OFF</div>
+
+    <div class="hint">
+      If enabled, STM32 starts autopilot automatically after 10s with no drive command.<br>
+      Any manual drive cancels autopilot immediately.
+    </div>
+  </div>
+
+<script>
+  const SEND_INTERVAL_MS = 80;
+
+  async function sendCmd(c) {
+    try {
+      await fetch(`/cmd/${encodeURIComponent(c)}`, { method: "GET", cache: "no-store" });
+    } catch (e) {}
+  }
+
+  const autoLightsEl = document.getElementById("autoLights");
+
+  function setLightsAutoMoving() { sendCmd('H'); sendCmd('s'); }
+  function setLightsAutoStopped() { sendCmd('h'); sendCmd('S'); }
+
+  function applyAutoLights(isMoving) {
+    if (!autoLightsEl.checked) return;
+    if (isMoving) setLightsAutoMoving();
+    else setLightsAutoStopped();
+  }
+
+  autoLightsEl.addEventListener("change", () => {
+    if (!autoLightsEl.checked) return;
+    applyAutoLights(activeCmd !== null);
+  });
+
+  let holdTimer = null;
+  let activeCmd = null;
+
+  // AUTOPILOT (added)
+  const autoPilotEnableEl = document.getElementById("autoPilotEnable");
+  const autoPilotStatusEl = document.getElementById("autoPilotStatus");
+
+  async function disableAutopilotForManual_() {
+    if (!autoPilotEnableEl.checked) return;
+    autoPilotEnableEl.checked = false;
+    autoPilotStatusEl.textContent = "Autopilot: OFF (manual override)";
+    await sendCmd('a');
+  }
+
+  function startHold(cmd) {
+    applyAutoLights(true);
+
+    // manual drive overrides autopilot
+    disableAutopilotForManual_();
+
+    stopHold(false);
+    activeCmd = cmd;
+    sendCmd(cmd);
+    holdTimer = setInterval(() => {
+      applyAutoLights(true);
+      sendCmd(cmd);
+    }, SEND_INTERVAL_MS);
+  }
+
+  function stopHold(sendStop = true) {
+    if (holdTimer) clearInterval(holdTimer);
+    holdTimer = null;
+
+    const wasActive = (activeCmd !== null);
+    activeCmd = null;
+
+    if (sendStop && wasActive) {
+      sendCmd('X');
+      applyAutoLights(false);
+    }
+  }
+
+  document.querySelectorAll("button.hold").forEach(btn => {
+    const cmd = btn.dataset.cmd;
+    btn.addEventListener("pointerdown", (e) => { e.preventDefault(); startHold(cmd); });
+    btn.addEventListener("pointerup",   (e) => { e.preventDefault(); stopHold(true); });
+    btn.addEventListener("pointerleave",(e) => { e.preventDefault(); stopHold(true); });
+    btn.addEventListener("pointercancel",(e)=> { e.preventDefault(); stopHold(true); });
+  });
+
+  document.querySelectorAll("button.tap[data-cmd]").forEach(btn => {
+    const cmd = btn.dataset.cmd;
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+
+      // if user taps Stop or any drive command, it is manual -> disable autopilot
+      if (cmd === 'X') {
+        await disableAutopilotForManual_();
+      }
+
+      await sendCmd(cmd);
+    });
+  });
+
+  window.addEventListener("blur", async () => {
+    await disableAutopilotForManual_();
+    sendCmd('X');
+    applyAutoLights(false);
+  });
+
+  const pressedKeys = new Set();
+  const keyToCmd = { "ArrowUp":"F", "ArrowDown":"B", "ArrowLeft":"L", "ArrowRight":"R" };
+
+  function evaluateKeyboardDrive() {
+    let cmd = null;
+    if (pressedKeys.has("ArrowUp")) cmd = "F";
+    else if (pressedKeys.has("ArrowDown")) cmd = "B";
+    else if (pressedKeys.has("ArrowLeft")) cmd = "L";
+    else if (pressedKeys.has("ArrowRight")) cmd = "R";
+
+    if (cmd) {
+      if (activeCmd !== cmd) startHold(cmd);
+    } else {
+      stopHold(true);
+    }
+  }
+
+  document.addEventListener("keydown", async (e) => {
+    if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
+
+    if (e.key === " ") {
+      pressedKeys.clear();
+      await disableAutopilotForManual_();
+      sendCmd('X');
+      applyAutoLights(false);
+      stopHold(false);
+      return;
+    }
+
+    if (keyToCmd[e.key]) {
+      await disableAutopilotForManual_();
+      pressedKeys.add(e.key);
+      evaluateKeyboardDrive();
+    }
+  }, { passive: false });
+
+  document.addEventListener("keyup", (e) => {
+    if (keyToCmd[e.key]) {
+      pressedKeys.delete(e.key);
+      evaluateKeyboardDrive();
+    }
+  });
+
+  const speedEl = document.getElementById("speed");
+  const speedValEl = document.getElementById("speedVal");
+  let lastSpeedCmd = null;
+
+  function applySpeed(pct) {
+    speedValEl.textContent = String(pct);
+    const cmd = String(Math.round(pct / 10));
+    if (cmd !== lastSpeedCmd) {
+      lastSpeedCmd = cmd;
+      sendCmd(cmd);
+    }
+  }
+
+  speedEl.addEventListener("input", () => applySpeed(parseInt(speedEl.value, 10)));
+  applySpeed(parseInt(speedEl.value, 10));
+
+  // ==== SENSORS UI ====
+  const readSensorsBtn = document.getElementById("readSensorsBtn");
+  const liveSensorsEl = document.getElementById("liveSensors");
+  const frontValEl = document.getElementById("frontVal");
+  const rearValEl  = document.getElementById("rearVal");
+  const sensorStatusEl = document.getElementById("sensorStatus");
+
+  let sensorPollTimer = null;
+
+  function fmtVal(v) {
+    if (v === null || v === undefined) return "—";
+    if (typeof v === "number" && v < 0) return "Timeout";
+    return String(v);
+  }
+
+  async function fetchSensors() {
+    try {
+      const r = await fetch("/sensors.json", { cache: "no-store" });
+      const j = await r.json();
+
+      frontValEl.textContent = fmtVal(j.front_mm);
+      rearValEl.textContent  = fmtVal(j.rear_mm);
+
+      if (j.age_ms === null || j.age_ms === undefined) {
+        sensorStatusEl.textContent = "No data yet";
+      } else {
+        sensorStatusEl.textContent = `Updated ${j.age_ms} ms ago`;
+      }
+    } catch (e) {
+      sensorStatusEl.textContent = "Sensor fetch error";
+    }
+  }
+
+  function startSensorPolling() {
+    if (sensorPollTimer) clearInterval(sensorPollTimer);
+    sensorPollTimer = setInterval(fetchSensors, 250);
+    fetchSensors();
+  }
+
+  function stopSensorPolling() {
+    if (sensorPollTimer) clearInterval(sensorPollTimer);
+    sensorPollTimer = null;
+  }
+
+  readSensorsBtn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    sensorStatusEl.textContent = "Requesting...";
+    await sendCmd('g');
+    setTimeout(fetchSensors, 120);
+    setTimeout(fetchSensors, 350);
+  });
+
+  liveSensorsEl.addEventListener("change", async () => {
+    if (liveSensorsEl.checked) {
+      sensorStatusEl.textContent = "Live ON";
+      await sendCmd('E');
+      startSensorPolling();
+    } else {
+      sensorStatusEl.textContent = "Live OFF";
+      stopSensorPolling();
+      await sendCmd('e');
+    }
+  });
+
+  // AUTOPILOT enable/disable button (added)
+  autoPilotEnableEl.addEventListener("change", async () => {
+    if (autoPilotEnableEl.checked) {
+      autoPilotStatusEl.textContent = "Autopilot: ENABLED (waiting)";
+      await sendCmd('A');
+    } else {
+      autoPilotStatusEl.textContent = "Autopilot: OFF";
+      await sendCmd('a');
+    }
+  });
+</script>
+
+</body>
+</html>

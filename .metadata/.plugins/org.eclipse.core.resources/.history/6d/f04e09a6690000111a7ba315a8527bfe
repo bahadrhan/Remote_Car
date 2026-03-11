@@ -1,0 +1,83 @@
+#include "stm32f0xx.h"
+
+#include "hw/BoardPins.hpp"
+#include "hw/Clock.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/Timebase.hpp"
+
+#include "sensors/UltrasonicSensor.hpp"
+
+static inline void headOn()  { Gpio::setHigh(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN); }
+static inline void headOff() { Gpio::setLow (BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN); }
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    Clock::enableGpioClock(BoardPins::HEADLIGHT_PORT);
+    Gpio::configureOutput(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+    headOff();
+
+    UltrasonicSensor front(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN,
+                           BoardPins::US_ECHO_PORT, BoardPins::US_ECHO_PIN);
+    front.init();
+
+    const uint32_t on_mm  = 250;
+    const uint32_t off_mm = 320;
+
+    bool light = false;
+    uint8_t closeCount = 0;
+    uint8_t farCount = 0;
+
+    while (1)
+    {
+        uint32_t d = 0;
+        bool ok = front.measureOnce(d);
+
+        if (!ok || d == 0 || d > 4000)
+        {
+            closeCount = 0;
+            farCount = 0;
+            Timebase::delayMs(250);
+            continue;
+        }
+
+        if (!light)
+        {
+            if (d <= on_mm)
+            {
+                if (++closeCount >= 2)
+                {
+                    light = true;
+                    headOn();
+                    closeCount = 0;
+                    farCount = 0;
+                }
+            }
+            else
+            {
+                closeCount = 0;
+            }
+        }
+        else
+        {
+            if (d >= off_mm)
+            {
+                if (++farCount >= 2)
+                {
+                    light = false;
+                    headOff();
+                    closeCount = 0;
+                    farCount = 0;
+                }
+            }
+            else
+            {
+                farCount = 0;
+            }
+        }
+
+        Timebase::delayMs(150);
+    }
+}

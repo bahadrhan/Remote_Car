@@ -1,0 +1,6 @@
+../Core/Src/hw/Gpio.cpp:5:10:void Gpio::configureOutput(GPIO_TypeDef*, uint16_t)	3
+../Core/Src/hw/Gpio.cpp:26:10:void Gpio::configureInput(GPIO_TypeDef*, uint16_t, Pull)	5
+../Core/Src/hw/Gpio.cpp:45:10:void Gpio::configureAltFunction(GPIO_TypeDef*, uint16_t, uint8_t)	4
+../Core/Src/hw/Gpio.cpp:73:10:void Gpio::setHigh(GPIO_TypeDef*, uint16_t)	1
+../Core/Src/hw/Gpio.cpp:78:10:void Gpio::setLow(GPIO_TypeDef*, uint16_t)	1
+../Core/Src/hw/Gpio.cpp:83:10:bool Gpio::read(GPIO_TypeDef*, uint16_t)	1

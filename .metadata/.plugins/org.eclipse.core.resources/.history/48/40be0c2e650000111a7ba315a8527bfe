@@ -1,0 +1,66 @@
+#pragma once
+#include <cstdint>
+#include "stm32f0xx.h"
+
+class UltrasonicDual
+{
+public:
+    enum class Which  : uint8_t { Front, Rear };
+    enum class Result : uint8_t { None, Ok, Timeout };
+
+    UltrasonicDual() = default;
+
+    // Configure GPIO, TIM2(1MHz), EXTI for both echo pins
+    void init();
+
+    // Start a measurement (non-blocking). Result arrives by interrupts.
+    void start(Which w, uint32_t timeout_us);
+
+    // Call periodically in main loop to handle timeout
+    void tick();
+
+    // If result available returns Ok/Timeout, and sets distance_mm on Ok.
+    // After returning Ok/Timeout, that channel becomes Idle again.
+    Result fetchResult(Which w, uint32_t& distance_mm);
+
+    // True while waiting for echo edges
+    bool isBusy(Which w) const;
+
+    // Called by static IRQ handlers (or can be called manually)
+    void onEchoEdge(Which w);
+
+    // ✅ ISR entry points (public) — these can access private self_
+    static void irqFront();
+    static void irqRear();
+
+private:
+    enum class State : uint8_t { Idle, WaitRise, WaitFall, DoneOk, DoneTimeout };
+
+    struct Chan
+    {
+        GPIO_TypeDef* trigPort = nullptr;
+        uint16_t      trigPin  = 0;
+
+        GPIO_TypeDef* echoPort = nullptr;
+        uint16_t      echoPin  = 0;
+
+        volatile State state      = State::Idle;
+        volatile uint32_t start_us   = 0;
+        volatile uint32_t timeout_us = 0;
+        volatile uint32_t t_rise     = 0;
+        volatile uint32_t t_fall     = 0;
+        volatile uint32_t dist_mm    = 0;
+    };
+
+    static UltrasonicDual* self_;
+
+    Chan front_;
+    Chan rear_;
+
+    static void tim2Init1MHz_();
+    static uint32_t nowUs_();
+    static void extiInitPa0Pc1_();
+    static uint32_t usToMm_(uint32_t echo_high_us);
+
+    void startImpl_(Chan& c, uint32_t timeout_us);
+};

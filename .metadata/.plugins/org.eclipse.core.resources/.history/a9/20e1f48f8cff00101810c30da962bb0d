@@ -1,0 +1,97 @@
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/Uart.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/BoardPins.hpp"
+#include <cstdint>
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    Clock::enableGpioClock(GPIOA);
+    Clock::enableGpioClock(GPIOB);
+
+    // Configure stoplight
+    Gpio::configureOutput(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+    Gpio::setLow(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+
+    // Initialize UART
+    Uart::init(115200);
+
+    Uart::write("\r\n=== UART RX Test ===\r\n");
+    Uart::write("Stoplight (PA4) will light when RX works\r\n");
+    Uart::write("Connect PA2 to PA3 for loopback\r\n\r\n");
+
+    uint32_t send_count = 0;
+    uint32_t receive_count = 0;
+
+    while (1)
+    {
+        // Send a character
+        Uart::writeByte('A' + (send_count % 26));
+        send_count++;
+
+        // Check USART status immediately
+        uint32_t isr_before = USART2->ISR;
+
+        // Wait a tiny bit
+        Timebase::delayUs(10);
+
+        // Check USART status again
+        uint32_t isr_after = USART2->ISR;
+
+        // Try to read
+        uint8_t rx_byte;
+        bool got_rx = Uart::readByte(rx_byte);
+
+        if (got_rx)
+        {
+            receive_count++;
+
+            // Turn on stoplight
+            Gpio::setHigh(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+
+            // Report
+            Uart::write("RX #");
+            Uart::writeByte('0' + (receive_count / 10));
+            Uart::writeByte('0' + (receive_count % 10));
+            Uart::write(": Got '");
+            Uart::writeByte(rx_byte);
+            Uart::write("' | ISR: ");
+
+            // Show ISR in hex
+            for (int i = 7; i >= 0; i--)
+            {
+                uint8_t nibble = (isr_after >> (i*4)) & 0xF;
+                Uart::writeByte(nibble < 10 ? '0' + nibble : 'A' + nibble - 10);
+            }
+            Uart::write("\r\n");
+
+            // Keep light on briefly
+            Timebase::delayMs(50);
+            Gpio::setLow(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+        }
+        else
+        {
+            // Ensure light is off
+            Gpio::setLow(BoardPins::STOPLIGHT_PORT, BoardPins::STOPLIGHT_PIN);
+
+            // Occasionally report no RX
+            if ((send_count % 50) == 0)
+            {
+                Uart::write("No RX after ");
+                Uart::writeByte('0' + (send_count / 100));
+                Uart::writeByte('0' + ((send_count % 100) / 10));
+                Uart::writeByte('0' + (send_count % 10));
+                Uart::write(" sends\r\n");
+            }
+        }
+
+        // Wait before next send
+        Timebase::delayMs(100);
+    }
+
+    return 0;
+}

@@ -1,0 +1,31 @@
+/*
+ * MotorDriver.hpp
+ *
+ *  Created on: Jan 15, 2026
+ *      Author: bahad
+ */
+
+#pragma once
+
+class MotorDriver
+{
+public:
+    void init();
+    void enable();
+    void disable();
+
+    void stop();
+
+    void forward();
+    void back();
+    void left();
+    void right();
+    void spinRight();
+private:
+    void setLeftForward();
+    void setLeftBack();
+    void setRightForward();
+    void setRightBack();
+
+    void pwmAlwaysOn();
+};

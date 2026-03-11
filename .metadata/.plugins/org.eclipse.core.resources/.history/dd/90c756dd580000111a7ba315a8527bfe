@@ -1,0 +1,25 @@
+#pragma once
+#include <cstdint>
+#include "cfg/Parameters.hpp"
+
+class ParameterStore
+{
+public:
+    const Parameters& get() const { return p_; }
+
+    bool setMaxSpeedPct(uint8_t pct)
+    {
+        if (pct > 100) pct = 100;
+        p_.max_speed_pct = pct;
+        return true;
+    }
+
+    bool setHeadlightEnabled(bool en) { p_.headlight_enabled = en; return true; }
+    bool setStoplightEnabled(bool en) { p_.stoplight_enabled = en; return true; }
+
+    bool setFrontUsEnabled(bool en) { p_.front_us_enabled = en; return true; }
+    bool setRearUsEnabled(bool en)  { p_.rear_us_enabled  = en; return true; }
+
+private:
+    Parameters p_{};
+};

@@ -1,0 +1,8 @@
+../Drivers/CMSIS/Include/core_cm0.h:730:22:void __NVIC_SetPriority(IRQn_Type, uint32_t)	24	static
+../Drivers/CMSIS/Include/core_cm0.h:920:26:uint32_t SysTick_Config(uint32_t)	16	static
+../Core/Src/hw/Timebase.cpp:13:17:void SysTick_Handler()	8	static
+../Core/Src/hw/Timebase.cpp:20:10:void Timebase::init()	8	static
+../Core/Src/hw/Timebase.cpp:27:14:uint32_t Timebase::millis()	8	static
+../Core/Src/hw/Timebase.cpp:32:10:void Timebase::delayMs(uint32_t)	24	static
+../Core/Src/hw/Timebase.cpp:37:14:uint32_t Timebase::micros()	40	static
+../Core/Src/hw/Timebase.cpp:55:10:void Timebase::delayUs(uint32_t)	24	static,ignoring_inline_asm

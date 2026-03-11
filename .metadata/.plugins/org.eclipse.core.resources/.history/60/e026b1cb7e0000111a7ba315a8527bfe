@@ -1,0 +1,39 @@
+#pragma once
+
+#include <cstdint>
+
+#include "app/Command.hpp"
+#include "app/Parameters.hpp"
+
+class CommandExecutor;
+class AutonomyController;
+
+class ControlManager
+{
+public:
+    void init(Parameters& params,
+              CommandExecutor& exec,
+              AutonomyController& autoCtrl);
+
+    void onCommand(const Command& cmd, uint32_t nowMs);
+
+
+    void update(uint32_t nowMs);
+
+    bool isStopLatched() const { return stopLatched_; }
+    Command lastCmd_{};
+
+private:
+    bool isMotionCommand_(CommandType t) const;
+
+private:
+    Parameters* params_ = nullptr;
+    CommandExecutor* exec_ = nullptr;
+    AutonomyController* auto_ = nullptr;
+
+    uint32_t lastCmdMs_ = 0;
+
+    bool stopLatched_ = false;
+    bool haveCmd_ = false;
+    Command lastCmd_{};
+};

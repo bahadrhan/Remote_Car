@@ -1,0 +1,144 @@
+#include "sensors/UltrasonicSensor.hpp"
+
+#include "hw/Clock.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/Timebase.hpp"
+
+bool UltrasonicSensor::tim2_inited_ = false;
+
+UltrasonicSensor::UltrasonicSensor(GPIO_TypeDef* trigPort, uint16_t trigPin,
+                                   GPIO_TypeDef* echoPort, uint16_t echoPin)
+    : pins_{trigPort, trigPin, echoPort, echoPin}
+{
+}
+
+void UltrasonicSensor::tim2Init1MHzOnce_()
+{
+    if (tim2_inited_) return;
+
+    RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
+
+    TIM2->CR1 = 0;
+    TIM2->PSC = 48 - 1;
+    TIM2->ARR = 0xFFFFFFFFu;
+    TIM2->CNT = 0;
+    TIM2->CR1 |= TIM_CR1_CEN;
+
+    tim2_inited_ = true;
+}
+
+uint32_t UltrasonicSensor::nowUs_()
+{
+    return TIM2->CNT;
+}
+
+void UltrasonicSensor::init()
+{
+    Clock::enableGpioClock(pins_.trigPort);
+    Clock::enableGpioClock(pins_.echoPort);
+
+    Gpio::configureOutput(pins_.trigPort, pins_.trigPin);
+
+    Gpio::configureInput(pins_.echoPort, pins_.echoPin, Gpio::Pull::Down);
+
+    Gpio::setLow(pins_.trigPort, pins_.trigPin);
+
+    Timebase::delayMs(50);
+    tim2Init1MHzOnce_();
+
+    lastTrigUs_ = nowUs_();
+}
+
+void UltrasonicSensor::guardTime_()
+{
+
+    const uint32_t now = nowUs_();
+    const uint32_t dt  = static_cast<uint32_t>(now - lastTrigUs_); // wrap-safe unsigned diff
+
+    if (dt < kGuardUs)
+    {
+        Timebase::delayUs(kGuardUs - dt);
+    }
+}
+
+void UltrasonicSensor::trigPulse10us_()
+{
+    guardTime_();
+
+    Gpio::setHigh(pins_.trigPort, pins_.trigPin);
+    Timebase::delayUs(10);
+    Gpio::setLow(pins_.trigPort, pins_.trigPin);
+
+    lastTrigUs_ = nowUs_();
+}
+
+bool UltrasonicSensor::waitForLevel_(bool high, uint32_t timeout_us)
+{
+    const uint32_t t0 = nowUs_();
+    while (static_cast<uint32_t>(nowUs_() - t0) < timeout_us)
+    {
+        const bool level = Gpio::read(pins_.echoPort, pins_.echoPin);
+        if (level == high) return true;
+    }
+    return false;
+}
+
+uint32_t UltrasonicSensor::measureEchoHighUs_(uint32_t timeout_us)
+{
+
+    if (!waitForLevel_(true, timeout_us))
+        return 0;
+
+    const uint32_t tRise = nowUs_();
+
+    // Wait for echo falling edge
+    if (!waitForLevel_(false, timeout_us))
+        return 0;
+
+    const uint32_t tFall = nowUs_();
+    return static_cast<uint32_t>(tFall - tRise);
+}
+
+uint32_t UltrasonicSensor::usToMm_(uint32_t echo_high_us)
+{
+
+    return (echo_high_us * 10u) / 58u;
+}
+
+bool UltrasonicSensor::measureOnce(uint32_t& distance_mm)
+{
+    distance_mm = 0;
+
+    trigPulse10us_();
+
+    const uint32_t echo_us = measureEchoHighUs_(30000);
+    if (echo_us == 0)
+        return false;
+
+    distance_mm = usToMm_(echo_us);
+    return true;
+}
+
+bool UltrasonicSensor::measureStable(uint32_t& distance_mm)
+{
+    distance_mm = 0;
+
+    uint32_t d1 = 0, d2 = 0, d3 = 0;
+    bool ok1 = measureOnce(d1);
+    Timebase::delayMs(60);
+    bool ok2 = measureOnce(d2);
+    Timebase::delayMs(60);
+    bool ok3 = measureOnce(d3);
+
+    if (!(ok1 && ok2 && ok3))
+        return false;
+
+    // median of 3
+    uint32_t a = d1, b = d2, c = d3;
+    if (a > b) { uint32_t t = a; a = b; b = t; }
+    if (b > c) { uint32_t t = b; b = c; c = t; }
+    if (a > b) { uint32_t t = a; a = b; b = t; }
+
+    distance_mm = b;
+    return true;
+}

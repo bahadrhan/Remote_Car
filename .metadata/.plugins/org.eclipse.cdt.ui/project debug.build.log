@@ -1,0 +1,17 @@
+20:12:24 **** Incremental Build of configuration Debug for project project debug ****
+make -j16 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F091xC -c -I../Core/Inc -I../Drivers/STM32F0xx_HAL_Driver/Inc -I../Drivers/STM32F0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "project debug.elf" @"objects.list"   -mcpu=cortex-m0 -T"D:\playground\STM32\project debug\STM32F091RCTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="project debug.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: project debug.elf
+ 
+arm-none-eabi-size  project\ debug.elf 
+arm-none-eabi-objdump -h -S project\ debug.elf  > "project debug.list"
+   text	   data	    bss	    dec	    hex	filename
+   5316	     12	   1572	   6900	   1af4	project debug.elf
+Finished building: default.size.stdout
+ 
+Finished building: project debug.list
+ 
+
+20:12:25 Build Finished. 0 errors, 0 warnings. (took 932ms)
+

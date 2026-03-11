@@ -1,0 +1,84 @@
+#include "stm32f0xx.h"
+
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/BoardPins.hpp"
+#include "hw/Gpio.hpp"
+
+#include "app/Parameters.hpp"
+#include "app/Command.hpp"
+#include "app/CommandExecutor.hpp"
+
+#include "app/MotorDriver.hpp"
+#include "app/Lights.hpp"
+
+static bool buttonPressedEdge()
+{
+    static bool last = false;
+    bool now = !Gpio::read(BoardPins::BTN_PORT, BoardPins::BTN_PIN); // PC13 active-low
+    bool pressed = (now && !last);
+    last = now;
+    return pressed;
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    // Button
+    Clock::enableGpioClock(BoardPins::BTN_PORT);
+    Gpio::configureInput(BoardPins::BTN_PORT, BoardPins::BTN_PIN);
+
+    // Motor + Lights
+    MotorDriver motor;
+    motor.init();
+    motor.enable();
+
+    Lights lights;
+    lights.init();
+
+    // Parameters + Executor
+    Parameters params;
+    params.defaultSpeedPercent = 60;
+    params.lightsEnabled  = true;
+    params.sensorsEnabled = true;
+    params.autoModeEnabled = true;
+
+    CommandExecutor exec;
+    exec.init(motor, lights, params);
+
+    // Start in STOP
+    exec.apply({CommandType::Stop, 0});
+
+    uint8_t step = 0;
+
+    while (1)
+    {
+        if (buttonPressedEdge())
+        {
+            Command cmd;
+
+            switch (step)
+            {
+                case 0: cmd = {CommandType::Stop, 0}; break;
+                case 1: cmd = {CommandType::Forward, 0}; break;
+                case 2: cmd = {CommandType::TurnLeft, 0}; break;
+                case 3: cmd = {CommandType::TurnRight, 0}; break;
+                case 4: cmd = {CommandType::Backward, 0}; break;
+                case 5: cmd = {CommandType::SetSpeed, 30}; break;
+                case 6: cmd = {CommandType::SetSpeed, 70}; break;
+                default: cmd = {CommandType::Stop, 0}; break;
+            }
+
+            exec.apply(cmd);
+
+            step = (step + 1) % 7;
+
+            // Debounce
+            Timebase::delayMs(200);
+        }
+
+        Timebase::delayMs(10);
+    }
+}

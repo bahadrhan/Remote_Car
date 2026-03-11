@@ -1,0 +1,5 @@
+../Core/Src/app/AutonomyController.cpp:6:6:void AutonomyController::init(Parameters&, UltrasonicSensor&, UltrasonicSensor&)	24	static
+../Core/Src/app/AutonomyController.cpp:17:6:void AutonomyController::reset()	16	static
+../Core/Src/app/AutonomyController.cpp:23:6:bool AutonomyController::frontBlocked_()	24	static
+../Core/Src/app/AutonomyController.cpp:35:6:bool AutonomyController::rearBlocked_()	24	static
+../Core/Src/app/AutonomyController.cpp:47:9:Command AutonomyController::update(uint32_t)	24	static

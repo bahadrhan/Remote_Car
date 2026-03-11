@@ -1,0 +1,48 @@
+#pragma once
+
+#include <cstdint>
+#include "stm32f0xx.h"
+
+namespace Gpio { enum class Pull : uint8_t; }
+
+class UltrasonicSensor
+{
+public:
+    struct Pins
+    {
+        GPIO_TypeDef* trigPort;
+        uint16_t      trigPin;
+        GPIO_TypeDef* echoPort;
+        uint16_t      echoPin;
+    };
+
+    UltrasonicSensor(GPIO_TypeDef* trigPort, uint16_t trigPin,
+                     GPIO_TypeDef* echoPort, uint16_t echoPin);
+
+    void init();
+
+    // Single measurement (fast)
+    bool measureOnce(uint32_t& distance_mm);
+
+    // More stable (median of 3). Slower but less jitter.
+    bool measureStable(uint32_t& distance_mm);
+
+private:
+    void tim2Init1MHzOnce_();
+    static uint32_t nowUs_();
+
+    void trigPulse10us_();
+    bool waitForLevel_(bool high, uint32_t timeout_us);
+    uint32_t measureEchoHighUs_(uint32_t timeout_us);
+    static uint32_t usToMm_(uint32_t echo_high_us);
+
+    // Wait a bit to avoid too-fast retriggers / cross-talk
+    void guardTime_();
+
+private:
+    Pins pins_;
+    static bool tim2_inited_;
+
+    uint32_t lastTrigUs_ = 0;
+    static constexpr uint32_t kGuardUs = 60000; // 60ms between triggers
+};

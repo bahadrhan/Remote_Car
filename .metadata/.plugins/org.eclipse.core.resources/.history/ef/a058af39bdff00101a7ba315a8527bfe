@@ -1,0 +1,87 @@
+/*
+ * UltrasonicSensor.cpp
+ *
+ *  Created on: Feb 1, 2026
+ *      Author: bahad
+ */
+
+/*
+ * UltrasonicSensor.cpp  (Front ultrasonic: PA1 trig, PA0 echo)
+ */
+
+#include "sensors/UltrasonicSensor.hpp"
+
+#include "hw/BoardPins.hpp"
+#include "hw/Clock.hpp"
+#include "hw/Gpio.hpp"
+#include "hw/Timebase.hpp"
+
+void UltrasonicSensor::init()
+{
+    Clock::enableGpioClock(BoardPins::US_TRIG_PORT);
+    Clock::enableGpioClock(BoardPins::US_ECHO_PORT);
+
+    Gpio::configureOutput(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN);
+    Gpio::configureInput(BoardPins::US_ECHO_PORT, BoardPins::US_ECHO_PIN);
+
+    Gpio::setLow(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN);
+    Timebase::delayUs(10);
+}
+
+void UltrasonicSensor::trigPulse10us_()
+{
+    Gpio::setHigh(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN);
+    Timebase::delayUs(10);
+    Gpio::setLow(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN);
+}
+
+bool UltrasonicSensor::waitForLevel_(bool high, uint32_t timeout_us)
+{
+    const uint32_t start = Timebase::micros();
+
+    while ((Timebase::micros() - start) < timeout_us)
+    {
+        const bool level = Gpio::read(BoardPins::US_ECHO_PORT, BoardPins::US_ECHO_PIN);
+        if (level == high) return true;
+        __NOP();
+    }
+    return false;
+}
+
+uint32_t UltrasonicSensor::measureEchoHighUs_(uint32_t timeout_us)
+{
+    if (!waitForLevel_(true, timeout_us))
+        return 0;
+
+    const uint32_t t0 = Timebase::micros();
+
+    if (!waitForLevel_(false, timeout_us))
+        return 0;
+
+    const uint32_t t1 = Timebase::micros();
+    return (t1 - t0);
+}
+
+uint32_t UltrasonicSensor::usToMm_(uint32_t echo_high_us)
+{
+    // HC-SR04: distance_cm ≈ echo_us / 58
+    // => mm ≈ (echo_us * 10) / 58
+    return (echo_high_us * 10u) / 58u;
+}
+
+bool UltrasonicSensor::measureOnce(uint32_t& distance_mm)
+{
+    Gpio::setLow(BoardPins::US_TRIG_PORT, BoardPins::US_TRIG_PIN);
+    Timebase::delayUs(2);
+
+    trigPulse10us_();
+
+    const uint32_t echo_us = measureEchoHighUs_(30000u); // ~5m max
+    if (echo_us == 0) return false;
+
+    distance_mm = usToMm_(echo_us);
+    return true;
+}
+
+
+

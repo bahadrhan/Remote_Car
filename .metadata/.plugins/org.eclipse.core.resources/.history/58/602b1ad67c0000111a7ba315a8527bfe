@@ -1,0 +1,135 @@
+#include "stm32f0xx.h"
+
+#include "hw/Clock.hpp"
+#include "hw/Timebase.hpp"
+#include "hw/BoardPins.hpp"
+#include "hw/Gpio.hpp"
+
+#include "app/Parameters.hpp"
+#include "app/Command.hpp"
+#include "app/CommandExecutor.hpp"
+#include "app/AutonomyController.hpp"
+#include "app/ControlManager.hpp"
+
+#include "app/MotorDriver.hpp"
+#include "app/Lights.hpp"
+
+#include "sensors/UltrasonicSensor.hpp"   // must provide: init(), measureOnce(uint32_t&)
+
+// PC13 active-low
+static bool buttonDown()
+{
+    return !Gpio::read(BoardPins::BTN_PORT, BoardPins::BTN_PIN);
+}
+
+int main()
+{
+    Clock::init48MHz_HSI48();
+    Timebase::init();
+
+    // Button
+    Clock::enableGpioClock(BoardPins::BTN_PORT);
+    Gpio::configureInput(BoardPins::BTN_PORT, BoardPins::BTN_PIN);
+
+    // Headlight pin access for autonomy blinking indicator
+    Clock::enableGpioClock(BoardPins::HEADLIGHT_PORT);
+    Gpio::configureOutput(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+    Gpio::setLow(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+
+    // Motor + Lights
+    MotorDriver motor;
+    motor.init();
+    motor.enable();
+
+    Lights lights;
+    lights.init();
+
+    // Parameters
+    Parameters params;
+    params.defaultSpeedPercent = 60;
+    params.commandTimeoutMs = 600;        // time with no commands -> autonomy
+    params.autoModeEnabled = true;
+    params.sensorsEnabled = true;
+    params.lightsEnabled = true;
+
+    // Sensors (front + rear)
+    UltrasonicSensor front;
+    front.init(/* uses BoardPins inside OR your init pins */);
+
+    UltrasonicSensor rear;
+    rear.init(/* uses BoardPins inside OR your init pins */);
+
+    // Autonomy + Executor + Control
+    AutonomyController autoCtrl;
+    autoCtrl.init(params, front, rear);
+
+    CommandExecutor exec;
+    exec.init(motor, lights, params);
+
+    ControlManager ctrl;
+    ctrl.init(params, exec, autoCtrl);
+
+    // Default STOP at boot (ctrl.init already applies stop)
+    uint32_t lastManualCmdMs = 0;
+    bool lastBtn = false;
+
+    // Blink state for autonomy indicator
+    uint32_t lastBlinkMs = 0;
+    bool blinkOn = false;
+
+    while (1)
+    {
+        const uint32_t now = Timebase::millis();
+        const bool btn = buttonDown();
+
+        // Button pressed -> manual forward command (keep alive)
+        if (btn)
+        {
+            params.lightsEnabled = true; // normal lights behavior in manual mode
+
+            ctrl.onCommand({CommandType::Forward, 0}, now);
+            lastManualCmdMs = now;
+        }
+
+        // Button released -> STOP immediately (momentary STOP, NOT latched)
+        if (!btn && lastBtn)
+        {
+            ctrl.onCommand({CommandType::Stop, 0}, now); // value=0 => NOT latched
+            lastManualCmdMs = now; // treat as a recent manual event
+        }
+
+        // Autonomy mode indicator:
+        // If no manual command for timeout -> autonomy active -> blink headlight
+        const bool autonomyActive =
+            (!btn) && params.autoModeEnabled &&
+            ((now - lastManualCmdMs) > params.commandTimeoutMs) &&
+            (!ctrl.isStopLatched());
+
+        if (autonomyActive)
+        {
+            // Disable normal lights so executor won't override pins
+            params.lightsEnabled = false;
+
+            if (now - lastBlinkMs >= 250) // 2Hz blink
+            {
+                lastBlinkMs = now;
+                blinkOn = !blinkOn;
+
+                if (blinkOn) Gpio::setHigh(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+                else         Gpio::setLow (BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+            }
+        }
+        else
+        {
+            // ensure blink doesn't leave it on
+            blinkOn = false;
+            Gpio::setLow(BoardPins::HEADLIGHT_PORT, BoardPins::HEADLIGHT_PIN);
+        }
+
+        // Run control (will choose manual vs autonomy)
+        ctrl.update(now);
+
+        lastBtn = btn;
+        Timebase::delayMs(10);
+    }
+}

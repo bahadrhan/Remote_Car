@@ -1,0 +1,32 @@
+#pragma once
+
+#include <cstdint>
+
+enum class CommandType : uint8_t
+{
+    None = 0,
+
+
+    Forward,
+    Backward,
+    TurnLeft,
+    TurnRight,
+    Stop,
+
+
+    SetSpeed,        // value = 0..100
+    EnableLights,    // value = 0/1
+    EnableSensors,   // value = 0/1
+    EnableAutoMode,   // value = 0/1
+	SetHeadlight,     // NEW (value 0/1)
+	SetBrakelight,
+	};
+
+
+struct Command
+{
+    CommandType type = CommandType::None;
+
+
+    uint8_t value = 0;
+};
